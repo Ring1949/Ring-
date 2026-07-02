@@ -1,4 +1,4 @@
-require("dotenv").config();
+﻿require("dotenv").config();
 
 const path = require("path");
 const fs = require("fs");
@@ -13,7 +13,9 @@ const { processUploadedImage } = require("./image-processing");
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 const publicDir = path.join(__dirname, "public");
-const uploadDir = path.join(__dirname, "..", "制作网站素材图片", "02-后台上传素材");
+const uploadDir = process.env.VERCEL
+  ? path.join("/tmp", "shanchuan-visual-archive-uploads")
+  : path.join(__dirname, "..", "制作网站素材图片", "02-后台上传素材");
 fs.mkdirSync(uploadDir, { recursive: true });
 database.initDatabase();
 
@@ -85,16 +87,20 @@ process.on("uncaughtException", (error) => {
   console.error("[uncaughtException]", error);
 });
 
-const server = app.listen(port, "127.0.0.1", () => {
-  console.log(`山川止行：http://localhost:${port}`);
-  console.log(`后台管理：http://localhost:${port}/admin`);
-});
+if (require.main === module) {
+  const server = app.listen(port, "127.0.0.1", () => {
+    console.log(`灞卞窛姝㈣锛歨ttp://localhost:${port}`);
+    console.log(`鍚庡彴绠＄悊锛歨ttp://localhost:${port}/admin`);
+  });
 
-server.on("error", (error) => {
-  if (error.code === "EADDRINUSE") {
-    console.error(`Port ${port} is already in use. Close the old local site process or use scripts/keep-site-online.ps1.`);
-  } else {
-    console.error("[serverError]", error);
-  }
-  process.exitCode = 1;
-});
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(`Port ${port} is already in use. Close the old local site process or use scripts/keep-site-online.ps1.`);
+    } else {
+      console.error("[serverError]", error);
+    }
+    process.exitCode = 1;
+  });
+}
+
+module.exports = app;

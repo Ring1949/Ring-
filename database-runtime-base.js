@@ -1,9 +1,11 @@
-const path = require("path");
+﻿const path = require("path");
 const fs = require("fs");
 const { DatabaseSync } = require("node:sqlite");
 const { seedDatabase } = require("./seed");
 
-const dataDir = path.join(__dirname, "data");
+const dataDir = process.env.VERCEL
+  ? path.join("/tmp", "shanchuan-visual-archive-data")
+  : path.join(__dirname, "data");
 fs.mkdirSync(dataDir, { recursive: true });
 const db = new DatabaseSync(path.join(dataDir, "archive.db"));
 db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
