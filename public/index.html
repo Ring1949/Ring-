@@ -1,0 +1,111 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="山川止行个人视觉档案">
+  <title>山川止行 — 个人视觉档案</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260624-1">
+  <link rel="stylesheet" href="/glass-surface.css?v=20260702-1">
+</head>
+<body>
+  <header class="nav nav-over-hero">
+    <a class="logo" href="/" aria-label="返回首页"></a>
+    <nav class="nav-links">
+      <a class="active" href="#top">首页</a>
+      <a href="/series.html">系列作品</a>
+      <a href="/works.html?category=all">作品库</a>
+      <a href="/inspiration.html">灵感库</a>
+      <a href="#about">关于</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="avatar admin-login-trigger" type="button" aria-label="进入后台"></button>
+      <button class="menu-button" type="button" aria-label="菜单"><i></i><i></i></button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div id="hero-media" class="hero-media"></div>
+      <div class="hero-shade"></div>
+      <div class="hero-copy">
+        <p id="hero-kicker">SHANCHUAN VISUAL ARCHIVE · 2026</p>
+        <h1 id="hero-title">山川止行</h1>
+        <span id="hero-subtitle"></span>
+      </div>
+    </section>
+
+    <div class="split"><span></span><p id="intro-text">独立设计师与影像创作者<br>BASED IN WUHAN</p><span></span></div>
+
+    <section id="works" class="section recommend-section home-first-section">
+      <header class="section-head recommend-head">
+        <p>RECOMMEND</p>
+        <div><h2>也许你会喜欢</h2><a href="/series.html">进入更多系列 →</a></div>
+      </header>
+      <div class="recommend-window">
+        <button class="carousel-button left" type="button">←</button>
+        <div id="recommend-track" class="recommend-track"></div>
+        <button class="carousel-button right" type="button">→</button>
+      </div>
+    </section>
+
+    <section id="database" class="section database-section">
+      <header class="section-head works-library-head">
+        <p>WORKS LIBRARY</p>
+        <div><h2>我的作品库</h2><a href="/works.html?category=all">查看全部 →</a></div>
+        <span>摄影、平面、空间、AI 与其他创作成果的归档。</span>
+      </header>
+      <div class="works-library-grid">
+        <a class="library-cover library-photo" href="/works.html?category=photo">
+          <div class="library-symbol library-image" data-category-cover="photo"><img src="/assets/archive-collage.png" alt="摄影分类封面"></div>
+          <div class="library-copy"><small>01 / PHOTOGRAPHY</small><h3>摄影</h3><p>城市、光线、胶片与观看方式。</p></div>
+        </a>
+        <a class="library-cover library-graphic" href="/works.html?category=graphic">
+          <div class="library-symbol library-image" data-category-cover="graphic"><img src="/assets/archive-collage.png" alt="平面分类封面"></div>
+          <div class="library-copy"><small>02 / GRAPHIC</small><h3>平面</h3><p>字体、版式、品牌与视觉系统。</p></div>
+        </a>
+        <a class="library-cover library-space" href="/works.html?category=space">
+          <div class="library-symbol library-image" data-category-cover="space"><img src="/assets/archive-collage.png" alt="空间分类封面"></div>
+          <div class="library-copy"><small>03 / SPACE</small><h3>空间</h3><p>尺度、材质、光线与空间秩序。</p></div>
+        </a>
+        <a class="library-cover library-ai" href="/works.html?category=ai">
+          <div class="library-symbol library-image" data-category-cover="ai"><img src="/assets/archive-collage.png" alt="AI 分类封面"></div>
+          <div class="library-copy"><small>04 / GENERATIVE</small><h3>AI</h3><p>图像生成、风格测试与概念草图。</p></div>
+        </a>
+        <a class="library-cover library-other" href="/works.html?category=other">
+          <div class="library-symbol library-image" data-category-cover="other"><img src="/assets/archive-collage.png" alt="其他分类封面"></div>
+          <div class="library-copy"><small>05 / OTHER</small><h3>其他</h3><p>日常实验、手绘、推演、手工与未完成想法。</p></div>
+        </a>
+      </div>
+    </section>
+
+    <section class="section channels-section">
+      <header class="section-head center"><p>INSPIRATION</p><div><h2>灵感频道</h2></div></header>
+      <div id="channel-list" class="channel-list"></div>
+    </section>
+
+    <section id="about" class="about">
+      <p id="about-kicker">ABOUT SHANCHUAN</p>
+      <h2 id="about-title">作品不是终点，<br>而是我理解世界的索引。</h2>
+      <div class="about-copy">
+        <span>INDEPENDENT CREATOR</span>
+        <p id="about-text"></p>
+        <a id="contact-link" href="#">一起做点什么 →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a id="footer-logo" class="footer-logo" href="/">山川止行</a>
+    <div><p id="footer-text">视觉档案 / 武汉 / 2026</p><p id="footer-email"></p></div>
+    <div id="footer-links" class="footer-links"><a href="/series.html">系列作品</a><a href="/works.html?category=all">作品库</a><a href="#about">关于</a></div>
+    <p id="footer-copyright" class="copyright">© 2026 SHANCHUAN STUDIO</p>
+  </footer>
+  <script src="/glass-surface.js?v=20260702-1"></script>
+  <script src="/common.js?v=20260623-1"></script>
+  <script src="script.js?v=20260624-2"></script>
+</body>
+</html>

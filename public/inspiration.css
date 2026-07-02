@@ -1,0 +1,13 @@
+.inspiration-page{background:#f4f4f1}
+.inspiration-page .nav{background:#f4f4f1eb}
+.inspiration-hero{padding:118px clamp(24px,5vw,72px) 46px;text-align:center}
+.inspiration-hero>p{margin:0 0 10px;color:#969994;font-size:10px;letter-spacing:.22em}
+.inspiration-hero h1{margin:0;color:#60645f;font-size:22px;font-weight:500;line-height:1.4;letter-spacing:.08em}
+.inspiration-hero span{display:block;max-width:620px;margin:14px auto 0;color:#858882;font-size:12px;line-height:1.8}
+.inspiration-empty{padding:0 clamp(20px,5vw,72px) 150px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.inspiration-channel{min-height:245px;padding:22px;display:flex;flex-direction:column;justify-content:flex-end;border:1px solid #eceeed;border-radius:22px;color:inherit;text-decoration:none;background:linear-gradient(145deg,#fff,#f0f1ee);box-shadow:0 14px 34px rgba(38,44,40,.055);transition:transform .3s,box-shadow .3s,border-color .3s}
+.inspiration-channel:hover{transform:translateY(-5px);border-color:#dfe3df;box-shadow:0 24px 54px rgba(38,44,40,.12)}
+.inspiration-channel b{margin-bottom:auto;color:#aaa;font-size:10px;letter-spacing:.18em}
+.inspiration-channel h2{margin:0 0 9px;font-size:20px;font-weight:500}
+.inspiration-channel p{margin:0;color:#858882;font-size:11px;line-height:1.75}
+@media(max-width:900px){.inspiration-empty{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.inspiration-hero{padding-top:96px}.inspiration-empty{padding:0 14px 100px;grid-template-columns:1fr}.inspiration-channel{min-height:190px}}

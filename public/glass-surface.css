@@ -1,0 +1,266 @@
+﻿/* React Bits GlassSurface adapted for this static site.
+   Applies a shared refractive glass material to button-like controls. */
+
+:root{
+  --glass-button-filter:url(#glass-surface-global-filter) saturate(1.28) brightness(1.04);
+  --glass-button-border:rgba(255,255,255,.72);
+  --glass-button-ink:#626877;
+  --glass-button-shadow:
+    0 16px 42px rgba(67,78,96,.13),
+    0 6px 18px rgba(67,78,96,.08),
+    inset 0 1px 0 rgba(255,255,255,.82),
+    inset 0 -1px 0 rgba(160,174,205,.16),
+    inset 0 0 16px rgba(255,255,255,.22);
+}
+
+:where(
+  .primary,
+  .carousel-button,
+  .language-toggle,
+  .admin-login-close,
+  .admin-login-form button[type="submit"],
+  .password-visibility,
+  .contact-dialog-close,
+  .contact-methods a,
+  .contact-methods button,
+  .modal-close,
+  .admin-tip button,
+  .row-actions button,
+  .media-batch-toolbar button,
+  .series-filters button,
+  .database-filters button,
+  .album-tags button,
+  .filter-list button,
+  .subfilters button,
+  .primary-filters a,
+  dialog .close
+){
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  border:1px solid var(--glass-button-border)!important;
+  color:var(--glass-button-ink);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.62),rgba(239,245,252,.24) 48%,rgba(222,231,242,.18)),
+    rgba(255,255,255,.20)!important;
+  box-shadow:var(--glass-button-shadow)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(1.45) brightness(1.04);
+  backdrop-filter:blur(18px) saturate(1.45) brightness(1.04);
+  transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease, color .22s ease, background .22s ease;
+}
+
+body.glass-surface-ready :where(
+  .primary,
+  .carousel-button,
+  .language-toggle,
+  .admin-login-close,
+  .admin-login-form button[type="submit"],
+  .password-visibility,
+  .contact-dialog-close,
+  .contact-methods a,
+  .contact-methods button,
+  .modal-close,
+  .admin-tip button,
+  .row-actions button,
+  .media-batch-toolbar button,
+  .series-filters button,
+  .database-filters button,
+  .album-tags button,
+  .filter-list button,
+  .subfilters button,
+  .primary-filters a,
+  dialog .close
+){
+  -webkit-backdrop-filter:var(--glass-button-filter);
+  backdrop-filter:var(--glass-button-filter);
+}
+
+:where(
+  .primary,
+  .carousel-button,
+  .language-toggle,
+  .admin-login-close,
+  .admin-login-form button[type="submit"],
+  .password-visibility,
+  .contact-dialog-close,
+  .contact-methods a,
+  .contact-methods button,
+  .modal-close,
+  .admin-tip button,
+  .row-actions button,
+  .media-batch-toolbar button,
+  .series-filters button,
+  .database-filters button,
+  .album-tags button,
+  .filter-list button,
+  .subfilters button,
+  .primary-filters a,
+  dialog .close
+)::before{
+  content:"";
+  position:absolute;
+  z-index:-2;
+  inset:-45% -22%;
+  border-radius:inherit;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse at 18% 24%,rgba(255,255,255,.72),transparent 24%),
+    radial-gradient(ellipse at 72% 82%,rgba(148,206,255,.34),transparent 30%),
+    radial-gradient(ellipse at 46% 92%,rgba(255,190,133,.24),transparent 28%),
+    linear-gradient(135deg,rgba(255,255,255,.30),rgba(255,255,255,.05));
+  filter:blur(9px);
+  opacity:.92;
+  transform:translate3d(0,0,0);
+}
+
+:where(
+  .primary,
+  .carousel-button,
+  .language-toggle,
+  .admin-login-close,
+  .admin-login-form button[type="submit"],
+  .password-visibility,
+  .contact-dialog-close,
+  .contact-methods a,
+  .contact-methods button,
+  .modal-close,
+  .admin-tip button,
+  .row-actions button,
+  .media-batch-toolbar button,
+  .series-filters button,
+  .database-filters button,
+  .album-tags button,
+  .filter-list button,
+  .subfilters button,
+  .primary-filters a,
+  dialog .close
+)::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:1px;
+  border-radius:inherit;
+  pointer-events:none;
+  background:
+    linear-gradient(145deg,rgba(255,255,255,.78),rgba(255,255,255,.08) 42%,rgba(170,190,220,.08) 70%,rgba(255,255,255,.30)),
+    radial-gradient(ellipse at 50% -20%,rgba(255,255,255,.90),transparent 42%);
+  opacity:.76;
+}
+
+:where(.primary,.admin-tip button,.row-actions button,.media-batch-toolbar button,.contact-methods a,.contact-methods button){
+  border-radius:999px;
+}
+
+.primary{
+  min-height:52px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  text-align:center;
+  color:#596270!important;
+  text-shadow:0 1px rgba(255,255,255,.82);
+}
+
+.primary:hover,
+.admin-tip button:hover,
+.row-actions button:hover,
+.media-batch-toolbar button:hover,
+.contact-methods a:hover,
+.contact-methods button:hover,
+.series-filters button:hover,
+.database-filters button:hover,
+.album-tags button:hover,
+.filter-list button:hover,
+.subfilters button:hover,
+.primary-filters a:hover{
+  transform:translateY(-2px);
+  border-color:rgba(255,255,255,.92)!important;
+  box-shadow:
+    0 22px 58px rgba(67,78,96,.18),
+    0 9px 24px rgba(67,78,96,.10),
+    inset 0 1px 0 rgba(255,255,255,.90),
+    inset 0 -1px 0 rgba(160,174,205,.20),
+    inset 0 0 20px rgba(255,255,255,.30)!important;
+}
+
+.primary:active,
+.admin-tip button:active,
+.row-actions button:active,
+.media-batch-toolbar button:active,
+.contact-methods a:active,
+.contact-methods button:active{
+  transform:translateY(1px) scale(.99);
+}
+
+.carousel-button,
+.modal-close,
+.contact-dialog-close,
+.admin-login-close,
+.password-visibility,
+dialog .close{
+  display:grid;
+  place-items:center;
+  border-radius:50%!important;
+}
+
+.carousel-button{
+  color:#6d7480!important;
+  background:rgba(255,255,255,.28)!important;
+}
+
+.admin-login-form button[type="submit"]{
+  color:#333!important;
+  background:rgba(255,255,255,.20)!important;
+}
+
+.admin-login-form button[type="submit"]:hover{
+  color:#24262b!important;
+  transform:translateX(2px) translateY(-1px);
+}
+
+.password-visibility{
+  box-shadow:none!important;
+}
+
+.danger,
+.row-actions .danger,
+.media-batch-toolbar .danger{
+  color:#a45762!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.60),rgba(255,235,239,.26)),
+    rgba(255,245,247,.22)!important;
+}
+
+.series-filters button.active,
+.database-filters button.active,
+.album-tags button.active,
+.filter-list button.active,
+.subfilters button.active,
+.primary-filters a.active{
+  color:#3d4652!important;
+  border-color:rgba(255,255,255,.92)!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.74),rgba(213,231,249,.34)),
+    rgba(255,255,255,.20)!important;
+}
+
+.upload-submit{
+  width:100%;
+  justify-self:stretch;
+}
+
+@supports not ((backdrop-filter:blur(10px)) or (-webkit-backdrop-filter:blur(10px))){
+  :where(button,.primary,.contact-methods a,.primary-filters a){
+    background:rgba(255,255,255,.76)!important;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  :where(button,.primary,.contact-methods a,.primary-filters a){
+    transition:none!important;
+  }
+}
+
+#contact-link{min-height:50px;padding:0 22px;display:inline-flex!important;align-items:center;justify-content:center;border-radius:999px!important;border:1px solid rgba(255,255,255,.72)!important;color:#5f6672!important;background:linear-gradient(180deg,rgba(255,255,255,.62),rgba(239,245,252,.24) 48%,rgba(222,231,242,.18)),rgba(255,255,255,.2)!important;box-shadow:var(--glass-button-shadow)!important;-webkit-backdrop-filter:var(--glass-button-filter);backdrop-filter:var(--glass-button-filter);position:relative;isolation:isolate;overflow:hidden;transition:.22s ease}
+#contact-link:hover{transform:translateY(-2px);box-shadow:0 22px 58px rgba(67,78,96,.18),0 9px 24px rgba(67,78,96,.10),inset 0 1px 0 rgba(255,255,255,.90),inset 0 -1px 0 rgba(160,174,205,.20),inset 0 0 20px rgba(255,255,255,.30)!important}

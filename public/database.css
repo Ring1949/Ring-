@@ -1,0 +1,26 @@
+.database-page{background:#f4f4f1}.database-page .nav{background:#f4f4f1ee}.database-page main{min-height:100vh}
+.database-hero{padding:190px clamp(22px,6vw,92px) 110px;border-bottom:1px solid #24252c12}
+.database-hero>p{margin:0 0 18px;color:#878981;font-size:11px;font-weight:700;letter-spacing:.2em}
+.database-hero h1{margin:0;font-size:clamp(54px,9vw,142px);font-weight:500;line-height:.94;letter-spacing:-.065em}
+.database-hero span{display:block;max-width:580px;margin:35px 0 0 auto;color:#777970;font-size:14px;line-height:1.9}
+.database-content{padding:55px clamp(18px,4vw,64px) 180px}
+.database-filters{position:sticky;z-index:20;top:82px;display:flex;gap:8px;margin-bottom:42px;overflow:auto}
+.database-filters button{flex:0 0 auto;padding:10px 17px;border:1px solid #24252c16;border-radius:99px;color:#6e706b;background:#f4f4f1d9;backdrop-filter:blur(18px);cursor:pointer;transition:.25s}
+.database-filters button:hover,.database-filters button.active{border-color:#24252c;color:#fff;background:#24252c}
+.database-status{padding:80px 0;color:#92948e;text-align:center;font-size:13px}
+.database-status:empty{display:none}.masonry-grid{column-count:4;column-gap:18px}
+.masonry-card{break-inside:avoid;margin:0 0 18px;overflow:hidden;border-radius:18px;background:#fff;box-shadow:0 16px 45px #2d302818;cursor:pointer;transition:transform .32s,box-shadow .32s}
+.masonry-card:hover{transform:translateY(-4px);box-shadow:0 28px 65px #2d302826}.masonry-media{position:relative;overflow:hidden;background:#d8d9d4}
+.masonry-card:nth-child(5n+1) .masonry-media{aspect-ratio:4/5}.masonry-card:nth-child(5n+2) .masonry-media{aspect-ratio:4/3}.masonry-card:nth-child(5n+3) .masonry-media{aspect-ratio:3/4}.masonry-card:nth-child(5n+4) .masonry-media{aspect-ratio:1/1}.masonry-card:nth-child(5n) .masonry-media{aspect-ratio:16/11}
+.masonry-media img,.masonry-media video{transition:transform .6s}.masonry-card:hover .masonry-media img,.masonry-card:hover .masonry-media video{transform:scale(1.025)}
+.masonry-copy{padding:17px 18px 20px}.masonry-copy h2{margin:0;font-size:16px;font-weight:600}.masonry-copy p{margin:8px 0 14px;color:#858780;font-size:11px;line-height:1.7}
+.masonry-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.masonry-meta span{padding:5px 8px;border-radius:99px;color:#6e706b;background:#f0f1ed;font-size:9px}.masonry-meta .category{color:#fff;background:#24252c}
+.database-lightbox{position:fixed;z-index:1200;inset:0;padding:28px;display:grid;place-items:center;background:#181a1dd9;backdrop-filter:blur(18px)}
+.database-lightbox-panel{position:relative;width:min(1080px,100%);max-height:92vh;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr);overflow:hidden;border:1px solid #ffffff2e;border-radius:24px;background:#f4f4f1;box-shadow:0 40px 120px #0008}
+.database-lightbox-media{min-height:460px;background:#17191c}.database-lightbox-media img,.database-lightbox-media video{object-fit:contain}
+.database-lightbox-copy{padding:55px 38px;overflow:auto}.database-lightbox-copy>p{color:#8a8c85;font-size:10px;letter-spacing:.13em}.database-lightbox-copy h2{margin:10px 0 20px;font-size:30px}.database-lightbox-copy>span{color:#666963;font-size:13px;line-height:1.9}
+.database-lightbox-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:30px}.database-lightbox-tags i{padding:6px 9px;border-radius:99px;background:#e6e7e2;font-size:10px;font-style:normal}.database-lightbox-close{position:absolute;z-index:3;right:16px;top:12px;border:0;background:none;font-size:30px;cursor:pointer}
+@media(max-width:1000px){.masonry-grid{column-count:3}.database-lightbox-panel{grid-template-columns:1fr}.database-lightbox-media{height:55vh;min-height:0}.database-lightbox-copy{padding:28px}}
+@media(max-width:700px){.database-hero{padding-top:145px}.database-hero span{margin-left:0}.database-content{padding-left:14px;padding-right:14px}.masonry-grid{column-count:2;column-gap:12px}.masonry-card{margin-bottom:12px;border-radius:13px}.masonry-copy{padding:14px}.database-lightbox{padding:10px}.database-lightbox-panel{max-height:96vh}}
+@media(max-width:480px){.masonry-grid{column-count:1}.database-filters{top:72px}.database-hero h1{font-size:17vw}}
+.masonry-media{aspect-ratio:auto!important}.masonry-media img{height:auto;min-height:0;object-fit:contain}.masonry-media video{height:auto;aspect-ratio:16/9;object-fit:cover}

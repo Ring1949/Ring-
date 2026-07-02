@@ -1,0 +1,21 @@
+body{font-family:"Manrope","Noto Sans SC",sans-serif;background:#f8f8f6}
+.works-nav{height:70px;padding:0 clamp(22px,4vw,64px);position:sticky;top:0;align-items:center;background:rgba(255,255,255,.94)}
+.brand{width:118px;height:48px;display:block;flex:0 0 auto;overflow:hidden;text-indent:-999px;background:url("/assets/ring-logo-dark.png") left center/contain no-repeat}.main-nav{margin-left:auto;display:flex;gap:34px!important;overflow:visible!important;scrollbar-width:none}
+.main-nav::-webkit-scrollbar,.primary-filters::-webkit-scrollbar,.subfilters::-webkit-scrollbar{display:none}
+.main-nav a{height:70px!important;padding:0!important;display:grid;place-items:center;position:relative;color:#666!important;font-size:12px!important}
+.main-nav a.active{color:#171817!important}.main-nav a.active:after{position:absolute;bottom:0}
+.heading{padding-top:38px;margin-bottom:32px}.heading>p{display:block;margin:0 0 8px;color:#aaa;font-size:9px;letter-spacing:.2em}
+.heading h1{color:#272825;font-size:42px;font-weight:500;letter-spacing:-.04em}
+.primary-filters{margin:24px auto 0;display:flex;justify-content:center;gap:5px;overflow:visible;scrollbar-width:none}
+.primary-filters a{padding:8px 13px;border-radius:999px;color:#92938f;font-size:10px;white-space:nowrap}
+.primary-filters a.active{color:#fff;background:#252624}
+.heading-row{margin-top:17px}.heading-row input{right:max(19px,calc((100vw - 1500px)/2))}
+.subfilters{min-height:46px;margin:28px 0 0;padding:13px 0;display:flex;align-items:center;justify-content:flex-start;gap:8px;overflow:visible;border-top:1px solid #dedfdb;border-bottom:1px solid #dedfdb;scrollbar-width:none}
+.subfilters>span{margin-right:10px;color:#aaa;font-size:9px;letter-spacing:.15em}
+.subfilters button{padding:7px 12px;border:0;border-radius:999px;color:#858681;background:transparent;cursor:pointer;font-size:10px;white-space:nowrap}
+.subfilters button:hover{background:#eeeeea}.subfilters button.active{color:#fff;background:#292a28}
+.grid{columns:4 250px;column-gap:16px}.item{margin-bottom:16px;background:#e5e6e2}
+.file-tile{min-height:270px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#777;background:linear-gradient(145deg,#efefeb,#dadcd7)}
+.file-tile b{font-size:40px}.file-tile small{margin-top:8px;letter-spacing:.16em}
+@media(max-width:900px){.main-nav{gap:16px!important}.heading-row input{position:static;margin-top:12px}.heading-row{flex-direction:column;gap:5px}.heading-row:before{left:calc(50% - 124px);right:auto;top:auto;bottom:8px;transform:none}}
+@media(max-width:700px){.works-nav{height:auto;padding:14px 18px;align-items:flex-start;flex-direction:column}.main-nav{width:100%;margin:0;gap:17px!important;overflow:auto!important}.main-nav a{height:34px!important}.heading h1{font-size:32px}.primary-filters,.subfilters{justify-content:flex-start;overflow:auto}.subfilters>span{display:none}}

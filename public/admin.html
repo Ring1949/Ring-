@@ -1,0 +1,134 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>内容管理 — 山川止行</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css?v=20260624-2">
+  <link rel="stylesheet" href="/glass-surface.css?v=20260702-1">
+</head>
+<body>
+  <div id="admin-app" class="admin-app" hidden>
+    <aside class="admin-sidebar">
+      <a class="admin-logo" href="/"></a>
+      <nav>
+        <button class="active" data-view="settings">首页设置</button>
+        <button data-view="media">上传作品</button>
+        <button data-view="projects">系列管理</button>
+        <button data-view="categories">作品管理</button>
+        <button data-view="contact">联系方式</button>
+      </nav>
+      <div><a href="/" target="_blank">查看网站 ↗</a><button id="logout">退出登录</button></div>
+    </aside>
+    <section class="admin-main">
+      <header class="admin-header"><div><p>CONTENT SYSTEM</p><h1 id="view-title">首页设置</h1></div><span id="save-status"></span></header>
+
+      <section class="admin-view active" data-panel="settings">
+        <div class="admin-tip">
+          <div><b>首页背景直接选择本地文件</b><span>图片保持静止；视频会静音、自动播放并循环。</span></div>
+          <button type="button" data-jump-view="media">打开作品上传</button>
+        </div>
+        <form id="settings-form" class="form-card">
+          <div class="field"><label>网站名称</label><input name="site_name"></div>
+          <div class="field"><label>首页主标题</label><input name="hero_title"></div>
+          <div class="field wide"><label>首页副标题</label><input name="hero_subtitle"></div>
+          <div class="field wide"><label>Hero 小字</label><input name="hero_kicker"></div>
+          <div class="field wide">
+            <label>首页全屏背景</label>
+            <label class="hero-file-picker" for="hero-background-file">
+              <input id="hero-background-file" name="hero_background_file" type="file" accept="image/*,video/mp4,video/webm,video/quicktime">
+              <b>选择本地图片或视频</b><small id="hero-file-name">未选择新文件时，保留当前背景</small>
+            </label>
+            <div id="hero-file-preview" class="hero-file-preview"></div>
+          </div>
+          <div class="field wide"><label>首页介绍文字</label><textarea name="intro_text" rows="3"></textarea></div>
+          <div class="field"><label>About 小字</label><input name="about_kicker"></div>
+          <div class="field wide"><label>About 标题</label><textarea name="about_title" rows="3"></textarea></div>
+          <div class="field wide"><label>About 文案</label><textarea name="about_text" rows="6"></textarea></div>
+          <div class="field wide"><label>页脚文字</label><input name="footer_text"></div>
+          <div class="field wide"><label>版权文字</label><input name="footer_copyright"></div>
+          <div id="settings-save-status" class="media-upload-status wide" aria-live="polite"></div>
+          <button class="primary">保存首页设置</button>
+        </form>
+      </section>
+
+      <section class="admin-view" data-panel="categories">
+        <div class="toolbar"><button class="primary" data-new="category">＋ 新增作品分类</button></div>
+        <div id="category-list" class="admin-list"></div>
+        <div class="taxonomy-section">
+          <p>WORK TAGS</p><h2>作品标签</h2>
+          <form id="tag-form" class="inline-form"><input name="name" placeholder="标签名称" required><input name="slug" placeholder="英文 slug"><button class="primary">新增标签</button></form>
+          <div id="tag-list" class="tag-admin-list"></div>
+        </div>
+      </section>
+
+      <section class="admin-view" data-panel="projects">
+        <div class="toolbar"><button class="primary" data-new="project">＋ 新增系列</button><select id="project-filter"><option value="">全部状态</option><option value="published">已发布</option><option value="draft">草稿</option></select></div>
+        <div id="project-list" class="admin-list"></div>
+      </section>
+
+      <section class="admin-view" data-panel="media">
+        <div class="media-guide">
+          <p>UPLOAD WORKFLOW</p><h2>上传图片与视频</h2>
+          <ol><li>选择或拖入文件</li><li>选择栏目或项目</li><li>设置展示位置</li><li>点击上传并等待完成</li></ol>
+        </div>
+        <form id="media-upload-form" class="form-card compact" enctype="multipart/form-data">
+          <div class="field wide">
+            <label>第一步：选择文件</label>
+            <label id="media-drop-zone" class="media-drop-zone" for="media-files">
+              <input id="media-files" name="files" type="file" accept="image/*,video/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" multiple required>
+              <span class="drop-icon">＋</span><b>点击选择，或把图片和视频拖到这里</b>
+              <small>图片：JPG / PNG / WEBP / GIF　视频：MP4 / MOV / WEBM　单个文件最大 100MB</small>
+            </label>
+            <div id="media-file-summary" class="media-file-summary">尚未选择文件</div>
+            <div id="upload-preview" class="upload-preview"></div>
+          </div>
+          <div class="field"><label>归属作品（可留空）</label><select name="project_id" id="media-project"></select></div>
+          <div class="field"><label>作品分类</label><select name="category_id" id="media-category"></select></div>
+          <div class="field wide"><label>标题</label><input name="title"></div>
+          <div class="field wide"><label>描述</label><textarea name="description" rows="3"></textarea></div>
+          <div class="field wide"><label>文字标签（逗号分隔）</label><input name="tags"></div>
+          <details class="shooting-fields wide">
+            <summary>拍摄 / 创作信息（可选）</summary>
+            <div>
+              <label>相机<input name="camera" placeholder="例如 Sony A7 IV"></label>
+              <label>镜头<input name="lens" placeholder="例如 35mm F1.4"></label>
+              <label>光圈<input name="aperture" placeholder="例如 f/2.8"></label>
+              <label>快门<input name="shutter_speed" placeholder="例如 1/250s"></label>
+              <label>ISO<input name="iso" placeholder="例如 400"></label>
+              <label>拍摄时间<input name="captured_at" placeholder="例如 2026-06-22"></label>
+            </div>
+          </details>
+          <div class="field wide"><label>系统标签</label><div id="media-tag-options" class="checks"></div></div>
+          <div class="checks purpose-options wide"><label><input name="is_hero" type="checkbox"> 设为首页全屏背景</label><label><input name="is_selected" type="checkbox"> 加入精选作品</label><label><input name="show_in_database" type="checkbox" checked> 加入作品库</label><label><input name="is_cover" type="checkbox"> 设为所属作品封面</label></div>
+          <div id="media-upload-status" class="media-upload-status wide" aria-live="polite"></div>
+          <button id="media-upload-button" class="primary upload-submit" type="submit"><span>上传并永久保存</span><small>保存到 SQLite + uploads</small></button>
+        </form>
+        <div class="media-library-head"><div><p>WORK LIBRARY</p><h2>已上传作品素材</h2></div><span id="media-count"></span></div>
+        <div id="media-list" class="media-admin-grid"></div>
+      </section>
+
+      <section class="admin-view" data-panel="contact">
+        <form id="contact-form" class="form-card">
+          <div class="field"><label>联系邮箱</label><input name="contact_email" type="email"></div>
+          <div class="field"><label>联系链接</label><input name="contact_link" placeholder="mailto:hello@example.com"></div>
+          <div class="field wide"><label>联系按钮文字</label><input name="contact_button_text"></div>
+          <div class="field"><label>弹窗标题</label><input name="contact_title" placeholder="联系我"></div>
+          <div class="field"><label>所在地 / 合作范围</label><input name="contact_location" placeholder="武汉 / 可远程合作"></div>
+          <div class="field wide"><label>联系说明</label><textarea name="contact_intro" rows="4"></textarea></div>
+          <div class="field"><label>微信号</label><input name="wechat"></div>
+          <div class="field"><label>小红书链接</label><input name="xiaohongshu" type="url"></div>
+          <div class="field"><label>Instagram 链接</label><input name="instagram" type="url"></div>
+          <div class="field"><label>Behance 链接</label><input name="behance" type="url"></div>
+          <button class="primary">保存联系方式</button>
+        </form>
+      </section>
+    </section>
+  </div>
+
+  <div id="modal" class="modal" hidden><div class="modal-card"><button class="modal-close">×</button><div id="modal-content"></div></div></div>
+  <script src="/glass-surface.js?v=20260702-1"></script>
+  <script src="/common.js?v=20260623-1"></script><script src="admin.js?v=20260624-1"></script>
+</body>
+</html>
