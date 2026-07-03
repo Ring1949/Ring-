@@ -1,35 +1,47 @@
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-const sharp = require("sharp");
-const exifr = require("exifr");
+﻿import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import sharp from "sharp";
+import exifr from "exifr";
+
+export type UploadedFileLike = {
+  fieldname?: string;
+  originalname: string;
+  encoding?: string;
+  mimetype: string;
+  destination?: string;
+  filename: string;
+  path: string;
+  size: number;
+  metadata?: Record<string, unknown>;
+};
 
 const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const optimizeThreshold = Number(process.env.IMAGE_OPTIMIZE_THRESHOLD_MB || 2) * 1024 * 1024;
 const maxDimension = Number(process.env.IMAGE_MAX_DIMENSION || 2560);
 const webpQuality = Number(process.env.IMAGE_WEBP_QUALITY || 84);
 
-function isImage(filePath) {
+export function isImage(filePath: string) {
   return imageExtensions.has(path.extname(filePath).toLowerCase());
 }
 
-function formatExposureTime(value) {
+function formatExposureTime(value: unknown) {
   const number = Number(value);
   if (!number) return "";
   if (number >= 1) return `${Number(number.toFixed(2))}s`;
   return `1/${Math.round(1 / number)}s`;
 }
 
-function formatDate(value) {
+function formatDate(value: unknown) {
   if (!value) return "";
-  const date = value instanceof Date ? value : new Date(value);
+  const date = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
-async function readImageInfo(filePath) {
+export async function readImageInfo(filePath: string) {
   if (!isImage(filePath)) return {};
   const metadata = await sharp(filePath, { failOn: "none" }).metadata();
-  let exif = {};
+  let exif: Record<string, any> = {};
   try {
     exif = await exifr.parse(filePath, {
       pick: [
@@ -54,11 +66,11 @@ async function readImageInfo(filePath) {
   };
 }
 
-async function optimizeImage(sourcePath, outputDirectory, options = {}) {
+export async function optimizeImage(sourcePath: string, outputDirectory: string, options: { originalName?: string } = {}) {
   const originalName = options.originalName || path.basename(sourcePath);
   const stat = fs.statSync(sourcePath);
   const info = await readImageInfo(sourcePath);
-  const largestDimension = Math.max(info.width || 0, info.height || 0);
+  const largestDimension = Math.max(Number((info as any).width) || 0, Number((info as any).height) || 0);
   const shouldOptimize = stat.size > optimizeThreshold || largestDimension > maxDimension;
   const token = `${Date.now()}-${crypto.randomBytes(5).toString("hex")}`;
 
@@ -69,9 +81,13 @@ async function optimizeImage(sourcePath, outputDirectory, options = {}) {
     const outputPath = path.join(outputDirectory, filename);
     fs.copyFileSync(sourcePath, outputPath);
     return {
-      filename, path: outputPath, size: stat.size,
+      filename,
+      path: outputPath,
+      size: stat.size,
       mimetype: extension === ".png" ? "image/png" : extension === ".webp" ? "image/webp" : "image/jpeg",
-      optimized: false, originalSize: stat.size, ...info
+      optimized: false,
+      originalSize: stat.size,
+      ...info
     };
   }
 
@@ -83,12 +99,17 @@ async function optimizeImage(sourcePath, outputDirectory, options = {}) {
   }
   await image.webp({ quality: webpQuality, effort: 5, smartSubsample: true }).toFile(outputPath);
   return {
-    filename, path: outputPath, size: fs.statSync(outputPath).size,
-    mimetype: "image/webp", optimized: true, originalSize: stat.size, ...info
+    filename,
+    path: outputPath,
+    size: fs.statSync(outputPath).size,
+    mimetype: "image/webp",
+    optimized: true,
+    originalSize: stat.size,
+    ...info
   };
 }
 
-async function processUploadedImage(file) {
+export async function processUploadedImage(file: UploadedFileLike): Promise<UploadedFileLike> {
   if (!file || !isImage(file.path)) return { ...file, metadata: {} };
   const sourcePath = file.path;
   const result = await optimizeImage(sourcePath, path.dirname(sourcePath), { originalName: file.originalname });
@@ -103,10 +124,4 @@ async function processUploadedImage(file) {
   };
 }
 
-module.exports = {
-  isImage,
-  optimizeImage,
-  processUploadedImage,
-  readImageInfo,
-  settings: { optimizeThreshold, maxDimension, webpQuality }
-};
+export const imageSettings = { optimizeThreshold, maxDimension, webpQuality };
