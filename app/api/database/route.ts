@@ -5,5 +5,5 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDatabaseMedia } from "@/services/database.service";
 
 export async function GET(request: NextRequest) {
-  return NextResponse.json(getDatabaseMedia(request.nextUrl.searchParams.get("category")));
+  return NextResponse.json(await getDatabaseMedia(request.nextUrl.searchParams.get("category")));
 }

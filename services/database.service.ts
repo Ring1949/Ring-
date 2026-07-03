@@ -1,19 +1,36 @@
-﻿import { initDatabase } from "@/lib/db";
+﻿import { getSupabase } from "@/lib/supabase";
 
-export function getDatabaseMedia(category: string | null) {
-  const db = initDatabase();
-  const clauses = ["media.show_in_database=1"];
-  const params: string[] = [];
+const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
+const normalizeMedia = (media: any) => ({
+  ...media,
+  is_hero: flag(media.is_hero),
+  is_selected: flag(media.is_selected),
+  is_cover: flag(media.is_cover),
+  show_in_database: flag(media.show_in_database),
+  show_in_inspiration: flag(media.show_in_inspiration),
+  project_title: media.projects?.title || "",
+  project_slug: media.projects?.slug || "",
+  category_name: media.categories?.name || "",
+  category_slug: media.categories?.slug || ""
+});
+
+export async function getDatabaseMedia(category: string | null) {
+  let query = getSupabase()
+    .from("media")
+    .select("*, projects:project_id(title,slug), categories:category_id(name,slug)")
+    .eq("show_in_database", true)
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+
   if (category && category !== "all") {
-    clauses.push("categories.slug=?");
-    params.push(category === "3d" ? "three-d" : category);
+    const slug = category === "3d" ? "three-d" : category;
+    const categoryResult = await getSupabase().from("categories").select("id").eq("slug", slug).maybeSingle();
+    if (categoryResult.error) throw categoryResult.error;
+    if (!categoryResult.data) return [];
+    query = query.eq("category_id", categoryResult.data.id);
   }
-  return db.prepare(`
-    SELECT media.*,projects.title AS project_title,projects.slug AS project_slug,
-    categories.name AS category_name,categories.slug AS category_slug
-    FROM media LEFT JOIN projects ON projects.id=media.project_id
-    LEFT JOIN categories ON categories.id=media.category_id
-    WHERE ${clauses.join(" AND ")}
-    ORDER BY media.sort_order,media.id
-  `).all(...params);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(normalizeMedia);
 }

@@ -5,5 +5,5 @@ import { NextResponse } from "next/server";
 import { getHomePayload } from "@/services/home.service";
 
 export async function GET() {
-  return NextResponse.json(getHomePayload());
+  return NextResponse.json(await getHomePayload());
 }

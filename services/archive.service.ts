@@ -1,173 +1,291 @@
-﻿import fs from "node:fs";
-import pathModule from "node:path";
-import crypto from "node:crypto";
-import { NextRequest } from "next/server";
-import { getSettings, initDatabase, now, replaceTagLinks, setSettings, slugify } from "@/lib/db";
-import { processUploadedImage } from "@/lib/image";
+﻿import { NextRequest } from "next/server";
+import { getSettings, now, replaceTagLinks, setSettings, slugify } from "@/lib/db";
+import { getSupabase, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
 import { bool, formValue, isAdmin, json, parseTagIds, requireAdmin } from "@/lib/utils";
-function projectWithRelations(db: any, project: any) {
-  if (!project) return null;
-  project.tags = db.prepare(`
-    SELECT tags.* FROM tags JOIN project_tags ON tags.id=project_tags.tag_id
-    WHERE project_tags.project_id=? ORDER BY tags.name
-  `).all(project.id);
-  project.media = db.prepare("SELECT * FROM media WHERE project_id=? ORDER BY sort_order,id").all(project.id);
-  project.category = project.category_id ? db.prepare("SELECT * FROM categories WHERE id=?").get(project.category_id) : null;
-  return project;
+
+const toBool = (value: unknown) => bool(value) === 1;
+const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
+
+function normalizeProject(project: any) {
+  if (!project) return project;
+  return {
+    ...project,
+    is_featured: flag(project.is_featured),
+    is_recommended: flag(project.is_recommended),
+    is_series: flag(project.is_series),
+    category_name: project.categories?.name || project.category_name || "",
+    category_slug: project.categories?.slug || project.category_slug || ""
+  };
 }
 
-const mediaSelect = `
-  SELECT media.*,projects.title AS project_title,categories.name AS category_name,
-  projects.year AS project_year,projects.location AS project_location,
-  categories.slug AS category_slug,
-  COALESCE((SELECT GROUP_CONCAT(tag_id) FROM media_tags WHERE media_tags.media_id=media.id),'') AS tag_ids
-  FROM media LEFT JOIN projects ON projects.id=media.project_id
-  LEFT JOIN categories ON categories.id=media.category_id
-`;
+function normalizeMedia(media: any) {
+  if (!media) return media;
+  return {
+    ...media,
+    is_hero: flag(media.is_hero),
+    is_selected: flag(media.is_selected),
+    is_cover: flag(media.is_cover),
+    show_in_database: flag(media.show_in_database),
+    show_in_inspiration: flag(media.show_in_inspiration),
+    project_title: media.projects?.title || media.project_title || "",
+    project_slug: media.projects?.slug || media.project_slug || "",
+    project_year: media.projects?.year || media.project_year || "",
+    project_location: media.projects?.location || media.project_location || "",
+    category_name: media.categories?.name || media.category_name || "",
+    category_slug: media.categories?.slug || media.category_slug || ""
+  };
+}
+
+function normalizeCategory(category: any, projectCount = 0) {
+  return { ...category, is_primary: flag(category.is_primary), project_count: projectCount };
+}
+
+function extensionFor(filename: string) {
+  const clean = filename.split("?")[0];
+  const index = clean.lastIndexOf(".");
+  return index >= 0 ? clean.slice(index + 1).toLowerCase() : "";
+}
+
+function inferMediaTypeFromMime(mimeType = "") {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  return "file";
+}
+
+async function uploadToStorage(file: File | null) {
+  if (!file || !file.size) return null;
+  const supabase = getSupabase();
+  const extension = extensionFor(file.name);
+  const storagePath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
+  const { error } = await supabase.storage
+    .from(SUPABASE_MEDIA_BUCKET)
+    .upload(storagePath, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false
+    });
+  if (error) throw error;
+  const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
+  return {
+    filename: storagePath.split("/").pop() || storagePath,
+    storage_path: storagePath,
+    public_url: data.publicUrl,
+    originalname: file.name,
+    mimetype: file.type || "application/octet-stream",
+    size: file.size,
+    metadata: {}
+  };
+}
+
+function storagePathFromPublicUrl(url: string) {
+  if (!url) return "";
+  const marker = `/storage/v1/object/public/${SUPABASE_MEDIA_BUCKET}/`;
+  const index = url.indexOf(marker);
+  if (index < 0) return "";
+  return decodeURIComponent(url.slice(index + marker.length));
+}
+
+async function removeStorageUrl(url: string) {
+  const storagePath = storagePathFromPublicUrl(url);
+  if (!storagePath) return;
+  await getSupabase().storage.from(SUPABASE_MEDIA_BUCKET).remove([storagePath]);
+}
+
+async function addMediaTagIds(mediaRows: any[]) {
+  const rows = mediaRows || [];
+  if (!rows.length) return rows.map(normalizeMedia);
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  const { data, error } = await getSupabase().from("media_tags").select("media_id,tag_id").in("media_id", ids);
+  if (error) throw error;
+  const map = new Map<number, number[]>();
+  (data || []).forEach((link: any) => {
+    if (!map.has(link.media_id)) map.set(link.media_id, []);
+    map.get(link.media_id)?.push(link.tag_id);
+  });
+  return rows.map((row) => normalizeMedia({ ...row, tag_ids: (map.get(row.id) || []).join(",") }));
+}
+
+async function projectWithRelations(project: any) {
+  if (!project) return null;
+  const supabase = getSupabase();
+  const [tagsResult, mediaResult, categoryResult] = await Promise.all([
+    supabase.from("project_tags").select("tag_id").eq("project_id", project.id),
+    supabase.from("media").select("*").eq("project_id", project.id).order("sort_order", { ascending: true }).order("id", { ascending: true }),
+    project.category_id ? supabase.from("categories").select("*").eq("id", project.category_id).maybeSingle() : Promise.resolve({ data: null, error: null }) as any
+  ]);
+  if (tagsResult.error) throw tagsResult.error;
+  if (mediaResult.error) throw mediaResult.error;
+  if (categoryResult.error) throw categoryResult.error;
+  let tags: any[] = [];
+  const tagIds = (tagsResult.data || []).map((row: any) => row.tag_id);
+  if (tagIds.length) {
+    const tagResult = await supabase.from("tags").select("*").in("id", tagIds).order("name", { ascending: true });
+    if (tagResult.error) throw tagResult.error;
+    tags = tagResult.data || [];
+  }
+  return {
+    ...normalizeProject(project),
+    tags,
+    media: (mediaResult.data || []).map(normalizeMedia),
+    category: categoryResult.data
+  };
+}
+
+async function syncHero(media: any) {
+  if (!media?.is_hero) return;
+  const supabase = getSupabase();
+  await supabase.from("media").update({ is_hero: false, updated_at: now() }).neq("id", media.id);
+  await setSettings({ hero_media: media.file_path, hero_media_type: media.media_type });
+}
 
 export async function handleArchiveGet(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const db = initDatabase();
+  const supabase = getSupabase();
   const { path } = await context.params;
   const route = path.join("/");
   const search = request.nextUrl.searchParams;
 
   if (route === "me") return json({ authenticated: isAdmin(request) });
-  if (route === "settings") return json(getSettings());
+  if (route === "settings") return json(await getSettings());
 
   if (route === "categories") {
     const includeAll = search.get("all") === "true" && isAdmin(request);
-    return json(db.prepare(`
-      SELECT categories.*, COUNT(DISTINCT projects.id) AS project_count
-      FROM categories
-      LEFT JOIN projects ON projects.category_id=categories.id AND projects.status='published'
-      ${includeAll ? "" : "WHERE categories.is_primary=1"}
-      GROUP BY categories.id ORDER BY categories.sort_order,categories.id
-    `).all());
+    let query = supabase.from("categories").select("*").order("sort_order", { ascending: true }).order("id", { ascending: true });
+    if (!includeAll) query = query.eq("is_primary", true);
+    const { data, error } = await query;
+    if (error) throw error;
+    const categories = await Promise.all((data || []).map(async (category: any) => {
+      const { count, error: countError } = await supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .eq("category_id", category.id)
+        .eq("status", "published");
+      if (countError) throw countError;
+      return normalizeCategory(category, count || 0);
+    }));
+    return json(categories);
   }
 
-  if (route === "tags") return json(db.prepare("SELECT * FROM tags ORDER BY name").all());
+  if (route === "tags") {
+    const { data, error } = await supabase.from("tags").select("*").order("name", { ascending: true });
+    if (error) throw error;
+    return json(data || []);
+  }
 
   if (route === "series") {
-    return json(db.prepare(`
-      SELECT projects.*,categories.name AS category_name,categories.slug AS category_slug,
-      COALESCE(NULLIF(projects.cover_image,''),(SELECT file_path FROM media WHERE media.project_id=projects.id AND media.media_type IN ('image','video') ORDER BY media.is_cover DESC,media.sort_order,media.id LIMIT 1)) AS series_cover,
-      COALESCE((SELECT media_type FROM media WHERE media.project_id=projects.id AND media.media_type IN ('image','video') ORDER BY media.is_cover DESC,media.sort_order,media.id LIMIT 1),'image') AS series_media_type
-      FROM projects LEFT JOIN categories ON categories.id=projects.category_id
-      WHERE projects.status='published' AND projects.is_series=1
-      ORDER BY projects.is_recommended DESC,projects.sort_order,projects.id
-    `).all());
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*, categories:category_id(name,slug)")
+      .eq("status", "published")
+      .eq("is_series", true)
+      .order("is_recommended", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+    if (error) throw error;
+    const projects = await Promise.all((data || []).map(async (project: any) => {
+      let cover = project.cover_image;
+      let mediaType = "image";
+      if (!cover) {
+        const media = await supabase
+          .from("media")
+          .select("file_path,media_type")
+          .eq("project_id", project.id)
+          .in("media_type", ["image", "video"])
+          .order("is_cover", { ascending: false })
+          .order("sort_order", { ascending: true })
+          .order("id", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (media.error) throw media.error;
+        cover = media.data?.file_path || "";
+        mediaType = media.data?.media_type || "image";
+      }
+      return { ...normalizeProject(project), series_cover: cover, series_media_type: mediaType };
+    }));
+    return json(projects);
   }
 
   if (route === "inspiration") {
-    return json(db.prepare(`
-      SELECT media.*,categories.name AS category_name,categories.slug AS category_slug
-      FROM media LEFT JOIN categories ON categories.id=media.category_id
-      WHERE media.show_in_inspiration=1 ORDER BY media.sort_order,media.id
-    `).all());
+    const { data, error } = await supabase
+      .from("media")
+      .select("*, categories:category_id(name,slug)")
+      .eq("show_in_inspiration", true)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+    if (error) throw error;
+    return json((data || []).map(normalizeMedia));
   }
 
   if (route === "projects") {
-    const clauses: string[] = [];
-    const params: any[] = [];
-    if (search.get("category_id")) { clauses.push("projects.category_id=?"); params.push(Number(search.get("category_id"))); }
-    if (search.get("featured") === "true") clauses.push("projects.is_featured=1");
-    if (search.get("recommended") === "true") clauses.push("projects.is_recommended=1");
-    if (search.get("status")) { clauses.push("projects.status=?"); params.push(search.get("status")); }
-    else if (!isAdmin(request)) clauses.push("projects.status='published'");
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    return json(db.prepare(`
-      SELECT projects.*,categories.name AS category_name,categories.slug AS category_slug
-      FROM projects LEFT JOIN categories ON categories.id=projects.category_id
-      ${where} ORDER BY projects.sort_order,projects.id
-    `).all(...params));
+    let query = supabase.from("projects").select("*, categories:category_id(name,slug)");
+    if (search.get("category_id")) query = query.eq("category_id", Number(search.get("category_id")));
+    if (search.get("featured") === "true") query = query.eq("is_featured", true);
+    if (search.get("recommended") === "true") query = query.eq("is_recommended", true);
+    if (search.get("status")) query = query.eq("status", search.get("status"));
+    else if (!isAdmin(request)) query = query.eq("status", "published");
+    const { data, error } = await query.order("sort_order", { ascending: true }).order("id", { ascending: true });
+    if (error) throw error;
+    return json((data || []).map(normalizeProject));
   }
 
   if (path[0] === "projects" && path[1]) {
-    const project = projectWithRelations(db, db.prepare(`
-      SELECT projects.*,categories.name AS category_name,categories.slug AS category_slug
-      FROM projects LEFT JOIN categories ON categories.id=projects.category_id WHERE projects.id=?
-    `).get(path[1]));
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*, categories:category_id(name,slug)")
+      .eq("id", Number(path[1]))
+      .maybeSingle();
+    if (error) throw error;
+    const project = await projectWithRelations(data);
     if (!project || (!isAdmin(request) && project.status !== "published")) return json({ error: "项目不存在" }, 404);
-    project.related = db.prepare(`
-      SELECT id,title,subtitle,cover_image,year FROM projects
-      WHERE category_id=? AND id!=? AND status='published' AND is_series=?
-      ORDER BY is_recommended DESC,sort_order LIMIT 4
-    `).all(project.category_id, project.id, project.is_series ? 1 : 0);
-    return json(project);
+    const related = await supabase
+      .from("projects")
+      .select("id,title,subtitle,cover_image,year")
+      .eq("category_id", project.category_id)
+      .neq("id", project.id)
+      .eq("status", "published")
+      .eq("is_series", toBool(project.is_series))
+      .order("is_recommended", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .limit(4);
+    if (related.error) throw related.error;
+    return json({ ...project, related: related.data || [] });
   }
 
   if (route === "media") {
-    const clauses: string[] = [];
-    const params: any[] = [];
+    let query = supabase.from("media").select("*, projects:project_id(title,slug,year,location), categories:category_id(name,slug)");
     ["project_id", "category_id"].forEach((key) => {
-      if (search.get(key)) { clauses.push(`media.${key}=?`); params.push(Number(search.get(key))); }
+      if (search.get(key)) query = query.eq(key, Number(search.get(key)));
     });
-    if (search.get("selected") === "true") clauses.push("media.is_selected=1");
-    if (search.get("hero") === "true") clauses.push("media.is_hero=1");
-    if (search.get("database") === "true") clauses.push("media.show_in_database=1");
-    if (search.get("category")) { clauses.push("categories.slug=?"); params.push(search.get("category") === "3d" ? "three-d" : search.get("category")); }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    return json(db.prepare(`${mediaSelect} ${where} ORDER BY media.sort_order,media.id`).all(...params));
+    if (search.get("selected") === "true") query = query.eq("is_selected", true);
+    if (search.get("hero") === "true") query = query.eq("is_hero", true);
+    if (search.get("database") === "true") query = query.eq("show_in_database", true);
+    if (search.get("category")) {
+      const slug = search.get("category") === "3d" ? "three-d" : search.get("category");
+      const category = await supabase.from("categories").select("id").eq("slug", slug).maybeSingle();
+      if (category.error) throw category.error;
+      if (!category.data) return json([]);
+      query = query.eq("category_id", category.data.id);
+    }
+    const { data, error } = await query.order("sort_order", { ascending: true }).order("id", { ascending: true });
+    if (error) throw error;
+    return json(await addMediaTagIds(data || []));
   }
 
   if (path[0] === "media" && path[1]) {
-    const media = db.prepare(`${mediaSelect} WHERE media.id=?`).get(path[1]);
-    if (!media) return json({ error: "媒体不存在" }, 404);
+    const { data, error } = await supabase
+      .from("media")
+      .select("*, projects:project_id(title,slug,year,location), categories:category_id(name,slug)")
+      .eq("id", Number(path[1]))
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return json({ error: "媒体不存在" }, 404);
+    const [media] = await addMediaTagIds([data]);
     return json(media);
   }
 
   return json({ error: "Not found" }, 404);
 }
 
-
-function removeUpload(filePath: string) {
-  if (!filePath?.startsWith("/uploads/")) return;
-  const uploadDir = process.env.VERCEL ? pathModule.join("/tmp", "shanchuan-visual-archive-uploads") : pathModule.join(process.cwd(), "uploads");
-  const absolute = pathModule.resolve(uploadDir, pathModule.basename(filePath));
-  if (absolute.startsWith(uploadDir) && fs.existsSync(absolute)) fs.unlinkSync(absolute);
-}
-
-async function saveUpload(file: File | null) {
-  if (!file || !file.size) return null;
-  const uploadDir = process.env.VERCEL ? pathModule.join("/tmp", "shanchuan-visual-archive-uploads") : pathModule.join(process.cwd(), "uploads");
-  fs.mkdirSync(uploadDir, { recursive: true });
-  const ext = pathModule.extname(file.name).toLowerCase();
-  const filename = `${Date.now()}-${crypto.randomBytes(5).toString("hex")}${ext}`;
-  const filepath = pathModule.join(uploadDir, filename);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  fs.writeFileSync(filepath, buffer);
-  const multerFile: any = {
-    fieldname: "file",
-    originalname: file.name,
-    encoding: "7bit",
-    mimetype: file.type || "application/octet-stream",
-    destination: uploadDir,
-    filename,
-    path: filepath,
-    size: buffer.length
-  };
-  return await processUploadedImage(multerFile);
-}
-
-function inferMediaType(file: any) {
-  if (file.mimetype?.startsWith("image/")) return "image";
-  if (file.mimetype?.startsWith("video/")) return "video";
-  return "file";
-}
-
-function syncHero(db: any, media: any) {
-  if (!media?.is_hero) return;
-  db.prepare("UPDATE media SET is_hero=0 WHERE id!=?").run(media.id);
-  const set = db.prepare(`
-    INSERT INTO settings (key,value,updated_at) VALUES (?,?,?)
-    ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at
-  `);
-  set.run("hero_media", media.file_path, now());
-  set.run("hero_media_type", media.media_type, now());
-}
-
 export async function handleArchivePost(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const db = initDatabase();
+  const supabase = getSupabase();
   const { path } = await context.params;
   const route = path.join("/");
 
@@ -189,10 +307,19 @@ export async function handleArchivePost(request: NextRequest, context: { params:
 
   if (route === "categories") {
     const form = await request.formData();
-    const file = await saveUpload(form.get("cover") as File | null);
-    const result = db.prepare(`INSERT INTO categories (name,slug,description,cover_image,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`)
-      .run(formValue(form,"name"), slugify(formValue(form,"slug") || formValue(form,"name")), formValue(form,"description"), file ? `/uploads/${file.filename}` : "", Number(formValue(form,"sort_order")) || 0, now(), now());
-    return json(db.prepare("SELECT * FROM categories WHERE id=?").get(result.lastInsertRowid), 201);
+    const file = await uploadToStorage(form.get("cover") as File | null);
+    const payload = {
+      name: formValue(form,"name"),
+      slug: slugify(formValue(form,"slug") || formValue(form,"name")),
+      description: formValue(form,"description"),
+      cover_image: file?.public_url || "",
+      sort_order: Number(formValue(form,"sort_order")) || 0,
+      created_at: now(),
+      updated_at: now()
+    };
+    const { data, error } = await supabase.from("categories").insert(payload).select("*").single();
+    if (error) throw error;
+    return json(normalizeCategory(data), 201);
   }
 
   if (route === "tags") {
@@ -202,42 +329,79 @@ export async function handleArchivePost(request: NextRequest, context: { params:
       : Object.fromEntries((await request.formData()).entries());
     const name = String(body.name || "").trim();
     if (!name) return json({ error: "标签名称不能为空" }, 400);
-    const slug = String(body.slug || slugify(name));
-    const result = db.prepare("INSERT INTO tags (name,slug,created_at) VALUES (?,?,?)").run(name, slugify(slug), now());
-    return json(db.prepare("SELECT * FROM tags WHERE id=?").get(result.lastInsertRowid), 201);
+    const { data, error } = await supabase.from("tags").insert({ name, slug: slugify(body.slug || name), created_at: now() }).select("*").single();
+    if (error) throw error;
+    return json(data, 201);
   }
 
   if (route === "projects") {
     const form = await request.formData();
-    const file = await saveUpload(form.get("cover") as File | null);
-    const result = db.prepare(`
-      INSERT INTO projects (title,subtitle,slug,category_id,description,cover_image,year,location,tags,is_featured,is_recommended,is_series,status,sort_order,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `).run(formValue(form,"title"), formValue(form,"subtitle"), slugify(formValue(form,"slug") || formValue(form,"title")), formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null, formValue(form,"description"), file ? `/uploads/${file.filename}` : "", formValue(form,"year"), formValue(form,"location"), formValue(form,"tags"), bool(form.get("is_featured")), bool(form.get("is_recommended")), bool(form.get("is_series")), formValue(form,"status") === "published" ? "published" : "draft", Number(formValue(form,"sort_order")) || 0, now(), now());
-    const id = Number(result.lastInsertRowid);
-    replaceTagLinks("project_tags", "project_id", id, parseTagIds(formValue(form,"tag_ids","[]")));
-    return json(projectWithRelations(db, db.prepare("SELECT * FROM projects WHERE id=?").get(id)), 201);
+    const file = await uploadToStorage(form.get("cover") as File | null);
+    const payload = {
+      title: formValue(form,"title"),
+      subtitle: formValue(form,"subtitle"),
+      slug: slugify(formValue(form,"slug") || formValue(form,"title")),
+      category_id: formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null,
+      description: formValue(form,"description"),
+      cover_image: file?.public_url || "",
+      year: formValue(form,"year"),
+      location: formValue(form,"location"),
+      tags: formValue(form,"tags"),
+      is_featured: toBool(form.get("is_featured")),
+      is_recommended: toBool(form.get("is_recommended")),
+      is_series: toBool(form.get("is_series")),
+      status: formValue(form,"status") === "published" ? "published" : "draft",
+      sort_order: Number(formValue(form,"sort_order")) || 0,
+      created_at: now(),
+      updated_at: now()
+    };
+    const { data, error } = await supabase.from("projects").insert(payload).select("*").single();
+    if (error) throw error;
+    await replaceTagLinks("project_tags", "project_id", data.id, parseTagIds(formValue(form,"tag_ids","[]")));
+    return json(await projectWithRelations(data), 201);
   }
 
   if (route === "media/upload") {
     const form = await request.formData();
     const files = form.getAll("files").filter((item): item is File => item instanceof File && item.size > 0);
     if (!files.length) return json({ error: "请选择要上传的文件" }, 400);
-    const insert = db.prepare(`
-      INSERT INTO media (project_id,category_id,title,description,file_path,original_name,file_type,mime_type,size,media_type,tags,camera,lens,aperture,shutter_speed,iso,captured_at,is_hero,is_selected,is_cover,show_in_database,sort_order,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `);
     const created = [];
     for (let index = 0; index < files.length; index += 1) {
-      const saved = await saveUpload(files[index]);
-      const mediaType = inferMediaType(saved);
-      const ext = pathModule.extname(saved.originalname).slice(1).toLowerCase();
-      const result = insert.run(formValue(form,"project_id") ? Number(formValue(form,"project_id")) : null, formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null, formValue(form,"title") || saved.originalname, formValue(form,"description"), `/uploads/${saved.filename}`, saved.originalname, ext, saved.mimetype, saved.size, mediaType, formValue(form,"tags"), formValue(form,"camera") || saved.metadata?.camera || "", formValue(form,"lens") || saved.metadata?.lens || "", formValue(form,"aperture") || saved.metadata?.aperture || "", formValue(form,"shutter_speed") || saved.metadata?.shutter_speed || "", formValue(form,"iso") || saved.metadata?.iso || "", formValue(form,"captured_at") || saved.metadata?.captured_at || "", index === 0 ? bool(form.get("is_hero")) : 0, bool(form.get("is_selected")), mediaType === "image" ? bool(form.get("is_cover")) : 0, bool(form.get("show_in_database")), (Number(formValue(form,"sort_order")) || 0) + index, now(), now());
-      const id = Number(result.lastInsertRowid);
-      if (form.get("tag_ids")) replaceTagLinks("media_tags", "media_id", id, parseTagIds(formValue(form,"tag_ids","[]")));
-      const media = db.prepare("SELECT * FROM media WHERE id=?").get(id);
-      syncHero(db, media);
-      created.push(media);
+      const saved = await uploadToStorage(files[index]);
+      if (!saved) continue;
+      const mediaType = inferMediaTypeFromMime(saved.mimetype);
+      const payload = {
+        project_id: formValue(form,"project_id") ? Number(formValue(form,"project_id")) : null,
+        category_id: formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null,
+        title: formValue(form,"title") || saved.originalname,
+        description: formValue(form,"description"),
+        file_path: saved.public_url,
+        storage_path: saved.storage_path,
+        original_name: saved.originalname,
+        file_type: extensionFor(saved.originalname),
+        mime_type: saved.mimetype,
+        size: saved.size,
+        media_type: mediaType,
+        tags: formValue(form,"tags"),
+        camera: formValue(form,"camera"),
+        lens: formValue(form,"lens"),
+        aperture: formValue(form,"aperture"),
+        shutter_speed: formValue(form,"shutter_speed"),
+        iso: formValue(form,"iso"),
+        captured_at: formValue(form,"captured_at"),
+        is_hero: index === 0 ? toBool(form.get("is_hero")) : false,
+        is_selected: toBool(form.get("is_selected")),
+        is_cover: mediaType === "image" ? toBool(form.get("is_cover")) : false,
+        show_in_database: toBool(form.get("show_in_database")),
+        sort_order: (Number(formValue(form,"sort_order")) || 0) + index,
+        created_at: now(),
+        updated_at: now()
+      };
+      const { data, error } = await supabase.from("media").insert(payload).select("*").single();
+      if (error) throw error;
+      if (form.get("tag_ids")) await replaceTagLinks("media_tags", "media_id", data.id, parseTagIds(formValue(form,"tag_ids","[]")));
+      await syncHero(data);
+      created.push(normalizeMedia(data));
     }
     return json(created, 201);
   }
@@ -246,88 +410,140 @@ export async function handleArchivePost(request: NextRequest, context: { params:
 }
 
 export async function handleArchivePut(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const db = initDatabase();
+  const supabase = getSupabase();
   const { path } = await context.params;
   const denied = requireAdmin(request);
   if (denied) return denied;
 
   if (path[0] === "settings") {
     const body = await request.json().catch(() => ({}));
-    return json(setSettings(body || {}));
+    return json(await setSettings(body || {}));
   }
 
   if (path[0] === "categories" && path[1]) {
-    const existing = db.prepare("SELECT * FROM categories WHERE id=?").get(path[1]);
-    if (!existing) return json({ error: "分类不存在" }, 404);
+    const existing = await supabase.from("categories").select("*").eq("id", Number(path[1])).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) return json({ error: "分类不存在" }, 404);
     const form = await request.formData();
-    const file = await saveUpload(form.get("cover") as File | null);
-    const cover = file ? `/uploads/${file.filename}` : formValue(form,"cover_image", existing.cover_image);
-    if (file) removeUpload(existing.cover_image);
-    db.prepare("UPDATE categories SET name=?,slug=?,description=?,cover_image=?,sort_order=?,updated_at=? WHERE id=?")
-      .run(formValue(form,"name",existing.name), slugify(formValue(form,"slug",existing.slug)), formValue(form,"description",existing.description), cover, Number(formValue(form,"sort_order",String(existing.sort_order))) || 0, now(), path[1]);
-    return json(db.prepare("SELECT * FROM categories WHERE id=?").get(path[1]));
+    const file = await uploadToStorage(form.get("cover") as File | null);
+    if (file) await removeStorageUrl(existing.data.cover_image);
+    const payload = {
+      name: formValue(form,"name",existing.data.name),
+      slug: slugify(formValue(form,"slug",existing.data.slug)),
+      description: formValue(form,"description",existing.data.description),
+      cover_image: file?.public_url || formValue(form,"cover_image", existing.data.cover_image),
+      sort_order: Number(formValue(form,"sort_order",String(existing.data.sort_order))) || 0,
+      updated_at: now()
+    };
+    const { data, error } = await supabase.from("categories").update(payload).eq("id", Number(path[1])).select("*").single();
+    if (error) throw error;
+    return json(normalizeCategory(data));
   }
 
   if (path[0] === "projects" && path[1]) {
-    const existing = db.prepare("SELECT * FROM projects WHERE id=?").get(path[1]);
-    if (!existing) return json({ error: "项目不存在" }, 404);
+    const existing = await supabase.from("projects").select("*").eq("id", Number(path[1])).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) return json({ error: "项目不存在" }, 404);
     const form = await request.formData();
-    const file = await saveUpload(form.get("cover") as File | null);
-    const cover = file ? `/uploads/${file.filename}` : formValue(form,"cover_image", existing.cover_image);
-    if (file) removeUpload(existing.cover_image);
-    db.prepare(`UPDATE projects SET title=?,subtitle=?,slug=?,category_id=?,description=?,cover_image=?,year=?,location=?,tags=?,is_featured=?,is_recommended=?,is_series=?,status=?,sort_order=?,updated_at=? WHERE id=?`)
-      .run(formValue(form,"title",existing.title), formValue(form,"subtitle",existing.subtitle), slugify(formValue(form,"slug",existing.slug)), formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null, formValue(form,"description",existing.description), cover, formValue(form,"year",existing.year), formValue(form,"location",existing.location), formValue(form,"tags",existing.tags), bool(form.get("is_featured")), bool(form.get("is_recommended")), form.get("is_series") === null ? existing.is_series : bool(form.get("is_series")), formValue(form,"status") === "published" ? "published" : "draft", Number(formValue(form,"sort_order",String(existing.sort_order))) || 0, now(), path[1]);
-    if (form.get("tag_ids") !== null) replaceTagLinks("project_tags", "project_id", Number(path[1]), parseTagIds(formValue(form,"tag_ids","[]")));
-    return json(projectWithRelations(db, db.prepare("SELECT * FROM projects WHERE id=?").get(path[1])));
+    const file = await uploadToStorage(form.get("cover") as File | null);
+    if (file) await removeStorageUrl(existing.data.cover_image);
+    const payload = {
+      title: formValue(form,"title",existing.data.title),
+      subtitle: formValue(form,"subtitle",existing.data.subtitle),
+      slug: slugify(formValue(form,"slug",existing.data.slug)),
+      category_id: formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null,
+      description: formValue(form,"description",existing.data.description),
+      cover_image: file?.public_url || formValue(form,"cover_image", existing.data.cover_image),
+      year: formValue(form,"year",existing.data.year),
+      location: formValue(form,"location",existing.data.location),
+      tags: formValue(form,"tags",existing.data.tags),
+      is_featured: toBool(form.get("is_featured")),
+      is_recommended: toBool(form.get("is_recommended")),
+      is_series: form.get("is_series") === null ? existing.data.is_series : toBool(form.get("is_series")),
+      status: formValue(form,"status") === "published" ? "published" : "draft",
+      sort_order: Number(formValue(form,"sort_order",String(existing.data.sort_order))) || 0,
+      updated_at: now()
+    };
+    const { data, error } = await supabase.from("projects").update(payload).eq("id", Number(path[1])).select("*").single();
+    if (error) throw error;
+    if (form.get("tag_ids") !== null) await replaceTagLinks("project_tags", "project_id", Number(path[1]), parseTagIds(formValue(form,"tag_ids","[]")));
+    return json(await projectWithRelations(data));
   }
 
   if (path[0] === "media" && path[1]) {
-    const existing = db.prepare("SELECT * FROM media WHERE id=?").get(path[1]);
-    if (!existing) return json({ error: "媒体不存在" }, 404);
+    const existing = await supabase.from("media").select("*").eq("id", Number(path[1])).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) return json({ error: "媒体不存在" }, 404);
     const body = await request.json();
-    db.prepare(`UPDATE media SET project_id=?,category_id=?,title=?,description=?,tags=?,camera=?,lens=?,aperture=?,shutter_speed=?,iso=?,captured_at=?,is_hero=?,is_selected=?,is_cover=?,show_in_database=?,sort_order=?,updated_at=? WHERE id=?`)
-      .run(body.project_id ? Number(body.project_id) : null, body.category_id ? Number(body.category_id) : null, body.title ?? existing.title, body.description ?? existing.description, body.tags ?? existing.tags, body.camera ?? existing.camera, body.lens ?? existing.lens, body.aperture ?? existing.aperture, body.shutter_speed ?? existing.shutter_speed, body.iso ?? existing.iso, body.captured_at ?? existing.captured_at, bool(body.is_hero), bool(body.is_selected), bool(body.is_cover), bool(body.show_in_database), Number(body.sort_order ?? existing.sort_order), now(), path[1]);
-    if (body.tag_ids !== undefined) replaceTagLinks("media_tags", "media_id", Number(path[1]), parseTagIds(body.tag_ids));
-    const media = db.prepare("SELECT * FROM media WHERE id=?").get(path[1]);
-    syncHero(db, media);
-    return json(media);
+    const payload = {
+      project_id: body.project_id ? Number(body.project_id) : null,
+      category_id: body.category_id ? Number(body.category_id) : null,
+      title: body.title ?? existing.data.title,
+      description: body.description ?? existing.data.description,
+      tags: body.tags ?? existing.data.tags,
+      camera: body.camera ?? existing.data.camera,
+      lens: body.lens ?? existing.data.lens,
+      aperture: body.aperture ?? existing.data.aperture,
+      shutter_speed: body.shutter_speed ?? existing.data.shutter_speed,
+      iso: body.iso ?? existing.data.iso,
+      captured_at: body.captured_at ?? existing.data.captured_at,
+      is_hero: toBool(body.is_hero),
+      is_selected: toBool(body.is_selected),
+      is_cover: toBool(body.is_cover),
+      show_in_database: toBool(body.show_in_database),
+      sort_order: Number(body.sort_order ?? existing.data.sort_order),
+      updated_at: now()
+    };
+    const { data, error } = await supabase.from("media").update(payload).eq("id", Number(path[1])).select("*").single();
+    if (error) throw error;
+    if (body.tag_ids !== undefined) await replaceTagLinks("media_tags", "media_id", Number(path[1]), parseTagIds(body.tag_ids));
+    await syncHero(data);
+    return json(normalizeMedia(data));
   }
 
   return json({ error: "Not found" }, 404);
 }
 
 export async function handleArchiveDelete(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const db = initDatabase();
+  const supabase = getSupabase();
   const { path } = await context.params;
   const denied = requireAdmin(request);
   if (denied) return denied;
 
-  if (path[0] === "tags" && path[1]) { db.prepare("DELETE FROM tags WHERE id=?").run(path[1]); return json({ deleted: true }); }
+  if (path[0] === "tags" && path[1]) {
+    const { error } = await supabase.from("tags").delete().eq("id", Number(path[1]));
+    if (error) throw error;
+    return json({ deleted: true });
+  }
   if (path[0] === "categories" && path[1]) {
-    const existing = db.prepare("SELECT * FROM categories WHERE id=?").get(path[1]);
-    if (!existing) return json({ error: "分类不存在" }, 404);
-    removeUpload(existing.cover_image);
-    db.prepare("DELETE FROM categories WHERE id=?").run(path[1]);
+    const existing = await supabase.from("categories").select("*").eq("id", Number(path[1])).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) return json({ error: "分类不存在" }, 404);
+    await removeStorageUrl(existing.data.cover_image);
+    const { error } = await supabase.from("categories").delete().eq("id", Number(path[1]));
+    if (error) throw error;
     return json({ deleted: true });
   }
   if (path[0] === "projects" && path[1]) {
-    const existing = db.prepare("SELECT * FROM projects WHERE id=?").get(path[1]);
-    if (!existing) return json({ error: "项目不存在" }, 404);
-    removeUpload(existing.cover_image);
-    db.prepare("SELECT file_path FROM media WHERE project_id=?").all(path[1]).forEach((media: any) => removeUpload(media.file_path));
-    db.prepare("DELETE FROM projects WHERE id=?").run(path[1]);
+    const existing = await supabase.from("projects").select("*").eq("id", Number(path[1])).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) return json({ error: "项目不存在" }, 404);
+    await removeStorageUrl(existing.data.cover_image);
+    const media = await supabase.from("media").select("file_path").eq("project_id", Number(path[1]));
+    if (media.error) throw media.error;
+    await Promise.all((media.data || []).map((item: any) => removeStorageUrl(item.file_path)));
+    const { error } = await supabase.from("projects").delete().eq("id", Number(path[1]));
+    if (error) throw error;
     return json({ deleted: true });
   }
   if (path[0] === "media" && path[1]) {
-    const existing = db.prepare("SELECT * FROM media WHERE id=?").get(path[1]);
-    if (!existing) return json({ error: "媒体不存在" }, 404);
-    removeUpload(existing.file_path);
-    db.prepare("DELETE FROM media WHERE id=?").run(path[1]);
+    const existing = await supabase.from("media").select("*").eq("id", Number(path[1])).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) return json({ error: "媒体不存在" }, 404);
+    await removeStorageUrl(existing.data.file_path);
+    const { error } = await supabase.from("media").delete().eq("id", Number(path[1]));
+    if (error) throw error;
     return json({ deleted: true });
   }
   return json({ error: "Not found" }, 404);
 }
-
-
-
-
