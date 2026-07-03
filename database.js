@@ -1,4 +1,4 @@
-const core = require("./database-settings-wrapper");
+﻿const core = require("./database-settings-wrapper");
 const path = require("path");
 
 function addColumn(table, definition) {
@@ -165,9 +165,11 @@ function migrateArchiveDatabase() {
     ["风格测试","不同视觉语言的快速验证","style-tests","ai","在正式创作前进行色彩、材质和构图实验。",22],
     ["概念草图","想法形成之前的图像","concept-sketches","ai","将模糊概念快速转化为可讨论的视觉草图。",23]
   ];
+  const categoryFallbacks = { food: "other", "three-d": "space", video: "other", interior: "space", motion: "other", daily: "other", database: "other" };
   examples.forEach(([title, subtitle, slug, categorySlug, description, order]) => {
+    const resolvedCategorySlug = categoryIds[categorySlug] ? categorySlug : categoryFallbacks[categorySlug] || "other";
     insertProject.run(
-      title, subtitle, slug, categoryIds[categorySlug], description, "", "2026", "",
+      title, subtitle, slug, categoryIds[resolvedCategorySlug], description, "", "2026", "",
       0, 0, order, core.now(), core.now()
     );
   });

@@ -1,6 +1,9 @@
-node_modules/
+﻿node_modules/
 .env
 data/
 uploads/*
 !uploads/.gitkeep
 npm-debug.log*
+.next/
+.vercel/
+
