@@ -1,6 +1,6 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { getSettings, now, replaceTagLinks, setSettings, slugify } from "@/lib/db";
-import { getSupabase, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
+import { getSupabaseServer, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
 import { bool, formValue, isAdmin, json, parseTagIds, requireAdmin } from "@/lib/utils";
 
 const toBool = (value: unknown) => bool(value) === 1;
@@ -46,31 +46,74 @@ function extensionFor(filename: string) {
   return index >= 0 ? clean.slice(index + 1).toLowerCase() : "";
 }
 
-function inferMediaTypeFromMime(mimeType = "") {
+function mimeTypeForExtension(extension: string) {
+  const map: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+    avif: "image/avif",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    m4v: "video/x-m4v",
+    webm: "video/webm",
+    avi: "video/x-msvideo",
+    mkv: "video/x-matroska",
+    pdf: "application/pdf",
+    zip: "application/zip"
+  };
+  return map[extension] || "application/octet-stream";
+}
+function inferMediaTypeFromMime(mimeType = "", filename = "") {
+  const extension = extensionFor(filename);
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType.startsWith("video/")) return "video";
+  if (["jpg", "jpeg", "png", "webp", "gif", "avif"].includes(extension)) return "image";
+  if (["mp4", "mov", "m4v", "webm", "avi", "mkv", "mpeg", "mpg"].includes(extension)) return "video";
   return "file";
 }
 
+let storageBucketReady = false;
+
+async function ensureStorageBucket() {
+  if (storageBucketReady) return;
+  const supabase = getSupabaseServer();
+  const existing = await supabase.storage.getBucket(SUPABASE_MEDIA_BUCKET);
+  if (!existing.error) {
+    storageBucketReady = true;
+    return;
+  }
+  const created = await supabase.storage.createBucket(SUPABASE_MEDIA_BUCKET, {
+    public: true,
+    fileSizeLimit: 1024 * 1024 * 1024,
+    allowedMimeTypes: null
+  });
+  if (created.error && !/already exists/i.test(created.error.message)) {
+    throw new Error(`Supabase Storage bucket ${SUPABASE_MEDIA_BUCKET} 不可用：${created.error.message}`);
+  }
+  storageBucketReady = true;
+}
 async function uploadToStorage(file: File | null) {
   if (!file || !file.size) return null;
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
+  await ensureStorageBucket();
   const extension = extensionFor(file.name);
   const storagePath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
   const { error } = await supabase.storage
     .from(SUPABASE_MEDIA_BUCKET)
     .upload(storagePath, file, {
-      contentType: file.type || "application/octet-stream",
+      contentType: file.type || mimeTypeForExtension(extension),
       upsert: false
     });
-  if (error) throw error;
+  if (error) throw new Error(`Supabase Storage 上传失败：${error.message}`);
   const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
   return {
     filename: storagePath.split("/").pop() || storagePath,
     storage_path: storagePath,
     public_url: data.publicUrl,
     originalname: file.name,
-    mimetype: file.type || "application/octet-stream",
+    mimetype: file.type || mimeTypeForExtension(extension),
     size: file.size,
     metadata: {}
   };
@@ -87,14 +130,14 @@ function storagePathFromPublicUrl(url: string) {
 async function removeStorageUrl(url: string) {
   const storagePath = storagePathFromPublicUrl(url);
   if (!storagePath) return;
-  await getSupabase().storage.from(SUPABASE_MEDIA_BUCKET).remove([storagePath]);
+  await getSupabaseServer().storage.from(SUPABASE_MEDIA_BUCKET).remove([storagePath]);
 }
 
 async function addMediaTagIds(mediaRows: any[]) {
   const rows = mediaRows || [];
   if (!rows.length) return rows.map(normalizeMedia);
   const ids = rows.map((row) => row.id).filter(Boolean);
-  const { data, error } = await getSupabase().from("media_tags").select("media_id,tag_id").in("media_id", ids);
+  const { data, error } = await getSupabaseServer().from("media_tags").select("media_id,tag_id").in("media_id", ids);
   if (error) throw error;
   const map = new Map<number, number[]>();
   (data || []).forEach((link: any) => {
@@ -106,7 +149,7 @@ async function addMediaTagIds(mediaRows: any[]) {
 
 async function projectWithRelations(project: any) {
   if (!project) return null;
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   const [tagsResult, mediaResult, categoryResult] = await Promise.all([
     supabase.from("project_tags").select("tag_id").eq("project_id", project.id),
     supabase.from("media").select("*").eq("project_id", project.id).order("sort_order", { ascending: true }).order("id", { ascending: true }),
@@ -132,13 +175,13 @@ async function projectWithRelations(project: any) {
 
 async function syncHero(media: any) {
   if (!media?.is_hero) return;
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   await supabase.from("media").update({ is_hero: false, updated_at: now() }).neq("id", media.id);
   await setSettings({ hero_media: media.file_path, hero_media_type: media.media_type });
 }
 
 export async function handleArchiveGet(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   const { path } = await context.params;
   const route = path.join("/");
   const search = request.nextUrl.searchParams;
@@ -285,7 +328,7 @@ export async function handleArchiveGet(request: NextRequest, context: { params: 
 }
 
 export async function handleArchivePost(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   const { path } = await context.params;
   const route = path.join("/");
 
@@ -369,14 +412,13 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     for (let index = 0; index < files.length; index += 1) {
       const saved = await uploadToStorage(files[index]);
       if (!saved) continue;
-      const mediaType = inferMediaTypeFromMime(saved.mimetype);
+      const mediaType = inferMediaTypeFromMime(saved.mimetype, saved.originalname);
       const payload = {
         project_id: formValue(form,"project_id") ? Number(formValue(form,"project_id")) : null,
         category_id: formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null,
         title: formValue(form,"title") || saved.originalname,
         description: formValue(form,"description"),
         file_path: saved.public_url,
-        storage_path: saved.storage_path,
         original_name: saved.originalname,
         file_type: extensionFor(saved.originalname),
         mime_type: saved.mimetype,
@@ -410,7 +452,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
 }
 
 export async function handleArchivePut(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   const { path } = await context.params;
   const denied = requireAdmin(request);
   if (denied) return denied;
@@ -505,7 +547,7 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
 }
 
 export async function handleArchiveDelete(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   const { path } = await context.params;
   const denied = requireAdmin(request);
   if (denied) return denied;

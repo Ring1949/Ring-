@@ -1,4 +1,4 @@
-﻿import { getSupabase } from "@/lib/supabase";
+import { getSupabaseServer } from "@/lib/supabase";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 const normalizeMedia = (media: any) => ({
@@ -15,7 +15,7 @@ const normalizeMedia = (media: any) => ({
 });
 
 export async function getDatabaseMedia(category: string | null) {
-  let query = getSupabase()
+  let query = getSupabaseServer()
     .from("media")
     .select("*, projects:project_id(title,slug), categories:category_id(name,slug)")
     .eq("show_in_database", true)
@@ -24,7 +24,7 @@ export async function getDatabaseMedia(category: string | null) {
 
   if (category && category !== "all") {
     const slug = category === "3d" ? "three-d" : category;
-    const categoryResult = await getSupabase().from("categories").select("id").eq("slug", slug).maybeSingle();
+    const categoryResult = await getSupabaseServer().from("categories").select("id").eq("slug", slug).maybeSingle();
     if (categoryResult.error) throw categoryResult.error;
     if (!categoryResult.data) return [];
     query = query.eq("category_id", categoryResult.data.id);

@@ -1,4 +1,4 @@
-﻿import { getSupabase } from "@/lib/supabase";
+import { getSupabaseServer } from "@/lib/supabase";
 
 export function now() {
   return new Date().toISOString();
@@ -13,7 +13,7 @@ export function slugify(value: unknown) {
 }
 
 export async function getSettings(): Promise<Record<string, string>> {
-  const { data, error } = await getSupabase()
+  const { data, error } = await getSupabaseServer()
     .from("settings")
     .select("key,value");
   if (error) throw error;
@@ -27,7 +27,7 @@ export async function setSettings(values: Record<string, unknown>) {
     updated_at: now()
   }));
   if (rows.length) {
-    const { error } = await getSupabase()
+    const { error } = await getSupabaseServer()
       .from("settings")
       .upsert(rows, { onConflict: "key" });
     if (error) throw error;
@@ -38,7 +38,7 @@ export async function setSettings(values: Record<string, unknown>) {
 export async function replaceTagLinks(table: string, ownerColumn: string, ownerId: number, tagIds: unknown[] = []) {
   if (!["project_tags", "media_tags"].includes(table)) throw new Error(`Invalid tag table: ${table}`);
   if (!["project_id", "media_id"].includes(ownerColumn)) throw new Error(`Invalid tag owner column: ${ownerColumn}`);
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   const deleted = await supabase.from(table).delete().eq(ownerColumn, ownerId);
   if (deleted.error) throw deleted.error;
   const rows = tagIds.map(Number).filter(Boolean).map((tagId) => ({ [ownerColumn]: ownerId, tag_id: tagId }));

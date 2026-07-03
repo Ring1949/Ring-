@@ -1,5 +1,5 @@
-﻿import { getSettings } from "@/lib/db";
-import { getSupabase } from "@/lib/supabase";
+import { getSettings } from "@/lib/db";
+import { getSupabaseServer } from "@/lib/supabase";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 const normalizeProject = (project: any) => ({
@@ -22,7 +22,7 @@ const normalizeMedia = (media: any) => ({
 });
 
 export async function getHomePayload() {
-  const supabase = getSupabase();
+  const supabase = getSupabaseServer();
   const settings = await getSettings();
 
   const [projectsResult, categoriesResult, heroResult, databasePreviewResult] = await Promise.all([
