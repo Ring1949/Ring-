@@ -1,5 +1,6 @@
 import { getSettings } from "@/lib/db";
 import { getSupabaseServer } from "@/lib/supabase";
+import { fallbackHomePayload, isSupabaseConfigError } from "@/lib/fallback-data";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 const normalizeProject = (project: any) => ({
@@ -21,7 +22,7 @@ const normalizeMedia = (media: any) => ({
   category_slug: media.categories?.slug || media.category_slug || ""
 });
 
-export async function getHomePayload() {
+async function getHomePayloadFromSupabase() {
   const supabase = getSupabaseServer();
   const settings = await getSettings();
 
@@ -88,3 +89,13 @@ export async function getHomePayload() {
     database_preview: databasePreview
   };
 }
+
+export async function getHomePayload() {
+  try {
+    return await getHomePayloadFromSupabase();
+  } catch (error) {
+    if (isSupabaseConfigError(error)) return fallbackHomePayload;
+    throw error;
+  }
+}
+

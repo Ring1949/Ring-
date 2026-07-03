@@ -1,4 +1,5 @@
 import { getSupabaseServer } from "@/lib/supabase";
+import { defaultSettings, isSupabaseConfigError } from "@/lib/fallback-data";
 
 export function now() {
   return new Date().toISOString();
@@ -13,11 +14,16 @@ export function slugify(value: unknown) {
 }
 
 export async function getSettings(): Promise<Record<string, string>> {
-  const { data, error } = await getSupabaseServer()
-    .from("settings")
-    .select("key,value");
-  if (error) throw error;
-  return Object.fromEntries((data || []).map((row: any) => [row.key, row.value ?? ""]));
+  try {
+    const { data, error } = await getSupabaseServer()
+      .from("settings")
+      .select("key,value");
+    if (error) throw error;
+    return { ...defaultSettings, ...Object.fromEntries((data || []).map((row: any) => [row.key, row.value ?? ""])) };
+  } catch (error) {
+    if (isSupabaseConfigError(error)) return defaultSettings;
+    throw error;
+  }
 }
 
 export async function setSettings(values: Record<string, unknown>) {
@@ -47,3 +53,4 @@ export async function replaceTagLinks(table: string, ownerColumn: string, ownerI
     if (inserted.error) throw inserted.error;
   }
 }
+

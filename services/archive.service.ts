@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getSettings, now, replaceTagLinks, setSettings, slugify } from "@/lib/db";
 import { getSupabaseServer, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
 import { bool, formValue, isAdmin, json, parseTagIds, requireAdmin } from "@/lib/utils";
+import { defaultCategories, isSupabaseConfigError } from "@/lib/fallback-data";
 
 const toBool = (value: unknown) => bool(value) === 1;
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
@@ -90,7 +91,7 @@ async function ensureStorageBucket() {
     allowedMimeTypes: null
   });
   if (created.error && !/already exists/i.test(created.error.message)) {
-    throw new Error(`Supabase Storage bucket ${SUPABASE_MEDIA_BUCKET} 不可用：${created.error.message}`);
+    throw new Error(`Supabase Storage bucket ${SUPABASE_MEDIA_BUCKET} is not available: ${created.error.message}`);
   }
   storageBucketReady = true;
 }
@@ -106,7 +107,7 @@ async function uploadToStorage(file: File | null) {
       contentType: file.type || mimeTypeForExtension(extension),
       upsert: false
     });
-  if (error) throw new Error(`Supabase Storage 上传失败：${error.message}`);
+  if (error) throw new Error(`Supabase Storage upload failed: ${error.message}`);
   const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
   return {
     filename: storagePath.split("/").pop() || storagePath,
@@ -180,7 +181,7 @@ async function syncHero(media: any) {
   await setSettings({ hero_media: media.file_path, hero_media_type: media.media_type });
 }
 
-export async function handleArchiveGet(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+async function handleArchiveGetCore(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const supabase = getSupabaseServer();
   const { path } = await context.params;
   const route = path.join("/");
@@ -327,6 +328,24 @@ export async function handleArchiveGet(request: NextRequest, context: { params: 
   return json({ error: "Not found" }, 404);
 }
 
+
+export async function handleArchiveGet(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+  try {
+    return await handleArchiveGetCore(request, context);
+  } catch (error) {
+    const { path } = await context.params;
+    const route = path.join("/");
+    if (isSupabaseConfigError(error)) {
+      if (route === "settings") return json(await getSettings());
+      if (route === "categories") return json(defaultCategories);
+      if (["projects", "media", "tags", "series", "inspiration"].includes(route)) return json([]);
+      if (path[0] === "projects") return json({ error: "项目不存在" }, 404);
+      if (path[0] === "media") return json({ error: "媒体不存在" }, 404);
+    }
+    const message = error instanceof Error ? error.message : String(error || "请求失败");
+    return json({ error: message }, 500);
+  }
+}
 export async function handleArchivePost(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const supabase = getSupabaseServer();
   const { path } = await context.params;
@@ -589,3 +608,4 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
   }
   return json({ error: "Not found" }, 404);
 }
+
