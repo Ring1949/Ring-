@@ -119,6 +119,57 @@ async function uploadToStorage(file: File | null) {
     metadata: {}
   };
 }
+async function createSignedStorageUpload(filename: string, contentType = "", size = 0) {
+  const supabase = getSupabaseServer();
+  await ensureStorageBucket();
+  const extension = extensionFor(filename);
+  const storagePath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
+  const signed = await supabase.storage
+    .from(SUPABASE_MEDIA_BUCKET)
+    .createSignedUploadUrl(storagePath);
+  if (signed.error) throw new Error(`Supabase signed upload failed: ${signed.error.message}`);
+  const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
+  return {
+    filename: storagePath.split("/").pop() || storagePath,
+    storage_path: storagePath,
+    public_url: data.publicUrl,
+    originalname: filename,
+    mimetype: contentType || mimeTypeForExtension(extension),
+    size,
+    signed_url: signed.data.signedUrl,
+    token: signed.data.token
+  };
+}
+
+function mediaPayloadFromSaved(saved: any, values: any, index = 0) {
+  const mediaType = inferMediaTypeFromMime(saved.mimetype, saved.originalname);
+  return {
+    project_id: values.project_id ? Number(values.project_id) : null,
+    category_id: values.category_id ? Number(values.category_id) : null,
+    title: values.title || saved.originalname,
+    description: values.description || "",
+    file_path: saved.public_url,
+    original_name: saved.originalname,
+    file_type: extensionFor(saved.originalname),
+    mime_type: saved.mimetype,
+    size: Number(saved.size) || 0,
+    media_type: mediaType,
+    tags: values.tags || "",
+    camera: values.camera || "",
+    lens: values.lens || "",
+    aperture: values.aperture || "",
+    shutter_speed: values.shutter_speed || "",
+    iso: values.iso || "",
+    captured_at: values.captured_at || "",
+    is_hero: index === 0 ? toBool(values.is_hero) : false,
+    is_selected: toBool(values.is_selected),
+    is_cover: mediaType === "image" ? toBool(values.is_cover) : false,
+    show_in_database: toBool(values.show_in_database),
+    sort_order: (Number(values.sort_order) || 0) + index,
+    created_at: now(),
+    updated_at: now()
+  };
+}
 
 function storagePathFromPublicUrl(url: string) {
   if (!url) return "";
@@ -422,6 +473,28 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     return json(await projectWithRelations(data), 201);
   }
 
+  if (route === "media/upload-sign") {
+    const body: any = await request.json().catch(() => ({}));
+    const filename = String(body.filename || "").trim();
+    if (!filename) return json({ error: "Missing filename" }, 400);
+    return json(await createSignedStorageUpload(filename, String(body.contentType || ""), Number(body.size) || 0));
+  }
+
+  if (route === "media/direct-record") {
+    const body: any = await request.json().catch(() => ({}));
+    const files = Array.isArray(body.files) ? body.files : [];
+    if (!files.length) return json({ error: "No uploaded files" }, 400);
+    const created = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const payload = mediaPayloadFromSaved(files[index], body, index);
+      const { data, error } = await supabase.from("media").insert(payload).select("*").single();
+      if (error) throw error;
+      if (body.tag_ids !== undefined) await replaceTagLinks("media_tags", "media_id", data.id, parseTagIds(body.tag_ids));
+      await syncHero(data);
+      created.push(normalizeMedia(data));
+    }
+    return json(created, 201);
+  }
   if (route === "media/upload") {
     const form = await request.formData();
     const files = form.getAll("files").filter((item): item is File => item instanceof File && item.size > 0);

@@ -42,6 +42,36 @@ mediaInput.addEventListener("change",(event)=>renderSelectedFiles(event.target.f
 ["dragleave","drop"].forEach((name)=>mediaDropZone.addEventListener(name,(event)=>{
   event.preventDefault();mediaDropZone.classList.remove("dragging");
 }));
+
+const DIRECT_UPLOAD_THRESHOLD = 3.5 * 1024 * 1024;
+function shouldUseDirectUpload(files){return [...files].some((file)=>file.size>DIRECT_UPLOAD_THRESHOLD||file.type.startsWith("video/"));}
+function mediaFormPayload(form, tagIds){
+  const data=new FormData(form);
+  data.delete("files");
+  data.delete("tag_ids");
+  const payload=Object.fromEntries(data.entries());
+  payload.tag_ids=JSON.stringify(tagIds);
+  return payload;
+}
+async function uploadFileDirectToSupabase(file){
+  const signed=await request("/api/media/upload-sign",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,contentType:file.type,size:file.size})});
+  const body=new FormData();
+  body.append("cacheControl","3600");
+  body.append("",file);
+  const response=await fetch(signed.signed_url,{method:"PUT",body});
+  if(!response.ok){const detail=await response.text().catch(()=>"");throw new Error(`Supabase video upload failed: ${response.status} ${detail}`);}
+  return signed;
+}
+async function uploadMediaDirect(form, files, tagIds){
+  const uploaded=[];
+  for(let index=0;index<files.length;index+=1){
+    mediaStatus.textContent=`正在直传 ${index+1}/${files.length}：${files[index].name}`;
+    uploaded.push(await uploadFileDirectToSupabase(files[index]));
+  }
+  const payload=mediaFormPayload(form,tagIds);
+  payload.files=uploaded;
+  return request("/api/media/direct-record",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+}
 mediaDropZone.addEventListener("drop",(event)=>{
   const transfer=new DataTransfer();
   [...event.dataTransfer.files].forEach((file)=>transfer.items.add(file));
@@ -52,34 +82,37 @@ mediaDropZone.addEventListener("drop",(event)=>{
 document.querySelector("#media-upload-form").addEventListener("submit",async(event)=>{
   event.preventDefault();
   if(!mediaInput.files.length){
-    mediaStatus.textContent="请先选择图片、视频或文件。";
+    mediaStatus.textContent="Please choose image, video, or file first.";
     mediaStatus.className="media-upload-status wide error";
     return;
   }
   try{
     mediaUploadButton.disabled=true;
-    mediaUploadButton.querySelector("span").textContent="正在上传…";
-    mediaStatus.textContent=`正在上传 ${mediaInput.files.length} 个文件，请不要关闭页面。`;
+    mediaUploadButton.querySelector("span").textContent="Uploading...";
+    mediaStatus.textContent=`Uploading ${mediaInput.files.length} file(s). Please keep this page open.`;
     mediaStatus.className="media-upload-status wide working";
+    const files=[...mediaInput.files];
     const data = new FormData(event.target);
     const tagIds = data.getAll("tag_ids");
     data.delete("tag_ids");
     data.set("tag_ids", JSON.stringify(tagIds));
-    const created=await request("/api/media/upload",{method:"POST",body:data});
+    const created=shouldUseDirectUpload(files)
+      ? await uploadMediaDirect(event.target,files,tagIds)
+      : await request("/api/media/upload",{method:"POST",body:data});
     event.target.reset();document.querySelector("#upload-preview").innerHTML="";
     renderSelectedFiles([]);
     await loadAll();
-    mediaStatus.textContent=`上传成功：${created.length} 个文件已永久保存。`;
+    mediaStatus.textContent=`Upload complete: ${created.length} file(s) saved.`;
     mediaStatus.className="media-upload-status wide success";
-    notify("媒体上传成功");
+    notify("Media uploaded");
   }catch(error){
-    console.error("媒体上传失败：",error);
-    mediaStatus.textContent=`上传失败：${error.message}`;
+    console.error("Media upload failed:",error);
+    mediaStatus.textContent=`Upload failed: ${error.message}`;
     mediaStatus.className="media-upload-status wide error";
     notify(error.message,true);
   }finally{
     mediaUploadButton.disabled=false;
-    mediaUploadButton.querySelector("span").textContent="上传并永久保存";
+    mediaUploadButton.querySelector("span").textContent="Upload and save";
   }
 });
 
