@@ -137,7 +137,12 @@ async function createSignedStorageUpload(filename: string, contentType = "", siz
     mimetype: contentType || mimeTypeForExtension(extension),
     size,
     signed_url: signed.data.signedUrl,
-    token: signed.data.token
+    token: signed.data.token,
+    upload_headers: {
+      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""}`,
+      "x-upsert": "false"
+    }
   };
 }
 
