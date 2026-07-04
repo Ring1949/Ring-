@@ -218,7 +218,6 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
     const { data, error } = await supabase
       .from("projects")
       .select("*, categories:category_id(name,slug)")
-      .eq("status", "published")
       .eq("is_series", true)
       .order("is_recommended", { ascending: false })
       .order("sort_order", { ascending: true })
@@ -278,7 +277,7 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
       .maybeSingle();
     if (error) throw error;
     const project = await projectWithRelations(data);
-    if (!project || (!isAdmin(request) && project.status !== "published")) return json({ error: "项目不存在" }, 404);
+    if (!project || (!isAdmin(request) && project.status !== "published")) return json({ error: "Resource not found" }, 404);
     const related = await supabase
       .from("projects")
       .select("id,title,subtitle,cover_image,year")
@@ -320,7 +319,7 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
       .eq("id", Number(path[1]))
       .maybeSingle();
     if (error) throw error;
-    if (!data) return json({ error: "媒体不存在" }, 404);
+    if (!data) return json({ error: "Resource not found" }, 404);
     const [media] = await addMediaTagIds([data]);
     return json(media);
   }
@@ -339,10 +338,10 @@ export async function handleArchiveGet(request: NextRequest, context: { params: 
       if (route === "settings") return json(await getSettings());
       if (route === "categories") return json(defaultCategories);
       if (["projects", "media", "tags", "series", "inspiration"].includes(route)) return json([]);
-      if (path[0] === "projects") return json({ error: "项目不存在" }, 404);
-      if (path[0] === "media") return json({ error: "媒体不存在" }, 404);
+      if (path[0] === "projects") return json({ error: "Resource not found" }, 404);
+      if (path[0] === "media") return json({ error: "Resource not found" }, 404);
     }
-    const message = error instanceof Error ? error.message : String(error || "请求失败");
+    const message = error instanceof Error ? error.message : String(error || "Request failed");
     return json({ error: message }, 500);
   }
 }
@@ -353,7 +352,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
 
   if (route === "login") {
     const body = await request.json().catch(() => ({}));
-    if (String(body.password || "") !== String(process.env.ADMIN_PASSWORD || "1234")) return json({ error: "密码错误" }, 401);
+    if (String(body.password || "") !== String(process.env.ADMIN_PASSWORD || "1234")) return json({ error: "Invalid password" }, 401);
     const response = json({ success: true, authenticated: true });
     response.cookies.set("sc_admin", "1", { httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 12, path: "/" });
     return response;
@@ -390,7 +389,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
       ? await request.json().catch(() => ({}))
       : Object.fromEntries((await request.formData()).entries());
     const name = String(body.name || "").trim();
-    if (!name) return json({ error: "标签名称不能为空" }, 400);
+    if (!name) return json({ error: "Bad request" }, 400);
     const { data, error } = await supabase.from("tags").insert({ name, slug: slugify(body.slug || name), created_at: now() }).select("*").single();
     if (error) throw error;
     return json(data, 201);
@@ -426,7 +425,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
   if (route === "media/upload") {
     const form = await request.formData();
     const files = form.getAll("files").filter((item): item is File => item instanceof File && item.size > 0);
-    if (!files.length) return json({ error: "请选择要上传的文件" }, 400);
+    if (!files.length) return json({ error: "Bad request" }, 400);
     const created = [];
     for (let index = 0; index < files.length; index += 1) {
       const saved = await uploadToStorage(files[index]);
@@ -484,7 +483,7 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
   if (path[0] === "categories" && path[1]) {
     const existing = await supabase.from("categories").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
-    if (!existing.data) return json({ error: "分类不存在" }, 404);
+    if (!existing.data) return json({ error: "Resource not found" }, 404);
     const form = await request.formData();
     const file = await uploadToStorage(form.get("cover") as File | null);
     if (file) await removeStorageUrl(existing.data.cover_image);
@@ -504,7 +503,7 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
   if (path[0] === "projects" && path[1]) {
     const existing = await supabase.from("projects").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
-    if (!existing.data) return json({ error: "项目不存在" }, 404);
+    if (!existing.data) return json({ error: "Resource not found" }, 404);
     const form = await request.formData();
     const file = await uploadToStorage(form.get("cover") as File | null);
     if (file) await removeStorageUrl(existing.data.cover_image);
@@ -534,7 +533,7 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
   if (path[0] === "media" && path[1]) {
     const existing = await supabase.from("media").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
-    if (!existing.data) return json({ error: "媒体不存在" }, 404);
+    if (!existing.data) return json({ error: "Resource not found" }, 404);
     const body = await request.json();
     const payload = {
       project_id: body.project_id ? Number(body.project_id) : null,
@@ -579,7 +578,7 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
   if (path[0] === "categories" && path[1]) {
     const existing = await supabase.from("categories").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
-    if (!existing.data) return json({ error: "分类不存在" }, 404);
+    if (!existing.data) return json({ error: "Resource not found" }, 404);
     await removeStorageUrl(existing.data.cover_image);
     const { error } = await supabase.from("categories").delete().eq("id", Number(path[1]));
     if (error) throw error;
@@ -588,7 +587,7 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
   if (path[0] === "projects" && path[1]) {
     const existing = await supabase.from("projects").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
-    if (!existing.data) return json({ error: "项目不存在" }, 404);
+    if (!existing.data) return json({ error: "Resource not found" }, 404);
     await removeStorageUrl(existing.data.cover_image);
     const media = await supabase.from("media").select("file_path").eq("project_id", Number(path[1]));
     if (media.error) throw media.error;
@@ -600,7 +599,7 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
   if (path[0] === "media" && path[1]) {
     const existing = await supabase.from("media").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
-    if (!existing.data) return json({ error: "媒体不存在" }, 404);
+    if (!existing.data) return json({ error: "Resource not found" }, 404);
     await removeStorageUrl(existing.data.file_path);
     const { error } = await supabase.from("media").delete().eq("id", Number(path[1]));
     if (error) throw error;
@@ -608,4 +607,3 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
   }
   return json({ error: "Not found" }, 404);
 }
-

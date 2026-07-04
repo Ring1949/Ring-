@@ -21,16 +21,46 @@ const normalizeMedia = (media: any) => ({
   category_name: media.categories?.name || media.category_name || "",
   category_slug: media.categories?.slug || media.category_slug || ""
 });
+async function addSeriesCovers(projects: any[]) {
+  const supabase = getSupabaseServer();
+  return Promise.all(projects.map(async (project: any) => {
+    let cover = project.cover_image || "";
+    let mediaType = "image";
+    if (!cover) {
+      const media = await supabase
+        .from("media")
+        .select("file_path,media_type")
+        .eq("project_id", project.id)
+        .in("media_type", ["image", "video"])
+        .order("is_cover", { ascending: false })
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (media.error) throw media.error;
+      cover = media.data?.file_path || "";
+      mediaType = media.data?.media_type || "image";
+    }
+    return { ...project, cover_image: cover, series_cover: cover, series_media_type: mediaType };
+  }));
+}
 
 async function getHomePayloadFromSupabase() {
   const supabase = getSupabaseServer();
   const settings = await getSettings();
 
-  const [projectsResult, categoriesResult, heroResult, databasePreviewResult] = await Promise.all([
+  const [projectsResult, recommendedSeriesResult, categoriesResult, heroResult, databasePreviewResult] = await Promise.all([
     supabase
       .from("projects")
       .select("*, categories:category_id(name,slug)")
       .eq("status", "published")
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true }),
+    supabase
+      .from("projects")
+      .select("*, categories:category_id(name,slug)")
+      .eq("is_series", true)
+      .eq("is_recommended", true)
       .order("sort_order", { ascending: true })
       .order("id", { ascending: true }),
     supabase
@@ -58,7 +88,7 @@ async function getHomePayloadFromSupabase() {
       .limit(12)
   ]);
 
-  for (const result of [projectsResult, categoriesResult, heroResult, databasePreviewResult]) {
+  for (const result of [projectsResult, recommendedSeriesResult, categoriesResult, heroResult, databasePreviewResult]) {
     if (result.error) throw result.error;
   }
 
@@ -77,14 +107,13 @@ async function getHomePayloadFromSupabase() {
     media_type: settings.hero_media_type || "image"
   };
   const databasePreview = (databasePreviewResult.data || []).map(normalizeMedia);
-  const seriesProjects = projects.filter((project: any) => project.is_series);
-  const recommended = seriesProjects.filter((project: any) => project.is_recommended);
+  const recommended = await addSeriesCovers((recommendedSeriesResult.data || []).map(normalizeProject));
 
   return {
     settings,
     hero,
     featured: projects.filter((project: any) => project.is_featured),
-    recommended: recommended.length ? recommended : seriesProjects.slice(0, 5),
+    recommended,
     categories,
     database_preview: databasePreview
   };
