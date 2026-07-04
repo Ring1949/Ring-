@@ -1,4 +1,4 @@
-﻿/* React Bits GlassSurface adapted for this static site.
+/* React Bits GlassSurface adapted for this static site.
    Applies a shared refractive glass material to button-like controls. */
 
 :root{
@@ -264,3 +264,56 @@ dialog .close{
 
 #contact-link{min-height:50px;padding:0 22px;display:inline-flex!important;align-items:center;justify-content:center;border-radius:999px!important;border:1px solid rgba(255,255,255,.72)!important;color:#5f6672!important;background:linear-gradient(180deg,rgba(255,255,255,.62),rgba(239,245,252,.24) 48%,rgba(222,231,242,.18)),rgba(255,255,255,.2)!important;box-shadow:var(--glass-button-shadow)!important;-webkit-backdrop-filter:var(--glass-button-filter);backdrop-filter:var(--glass-button-filter);position:relative;isolation:isolate;overflow:hidden;transition:.22s ease}
 #contact-link:hover{transform:translateY(-2px);box-shadow:0 22px 58px rgba(67,78,96,.18),0 9px 24px rgba(67,78,96,.10),inset 0 1px 0 rgba(255,255,255,.90),inset 0 -1px 0 rgba(160,174,205,.20),inset 0 0 20px rgba(255,255,255,.30)!important}
+
+/* Recommend carousel: keep navigation controls anchored above the image track.
+   The shared glass button base sets position:relative, so this section restores
+   the carousel-specific absolute layout after the glass material is applied. */
+.recommend-window .carousel-button{
+  position:absolute!important;
+  z-index:12!important;
+  top:42%!important;
+  width:54px!important;
+  height:54px!important;
+  display:grid!important;
+  place-items:center!important;
+  border-radius:50%!important;
+  color:#343945!important;
+  background:
+    radial-gradient(circle at 30% 24%,rgba(255,255,255,.92),rgba(255,255,255,.30) 38%,rgba(230,238,247,.20) 72%),
+    rgba(255,255,255,.42)!important;
+  border:1px solid rgba(255,255,255,.82)!important;
+  box-shadow:
+    0 20px 45px rgba(36,43,53,.20),
+    0 7px 18px rgba(36,43,53,.12),
+    inset 0 1px 0 rgba(255,255,255,.96),
+    inset 0 -1px 0 rgba(151,166,190,.18)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(1.35)!important;
+  backdrop-filter:blur(18px) saturate(1.35)!important;
+  font-size:0!important;
+  cursor:pointer!important;
+  transform:none!important;
+}
+.recommend-window .carousel-button.left{left:clamp(18px,4vw,72px)!important}
+.recommend-window .carousel-button.right{right:clamp(18px,4vw,72px)!important}
+.recommend-window .carousel-button::after{
+  content:""!important;
+  width:12px;
+  height:12px;
+  border-top:2px solid currentColor;
+  border-right:2px solid currentColor;
+  opacity:.78;
+}
+.recommend-window .carousel-button.left::after{transform:translateX(2px) rotate(-135deg)}
+.recommend-window .carousel-button.right::after{transform:translateX(-2px) rotate(45deg)}
+.recommend-window .carousel-button:hover{
+  transform:translateY(-2px)!important;
+  color:#20242c!important;
+  border-color:rgba(255,255,255,.96)!important;
+  box-shadow:
+    0 26px 58px rgba(36,43,53,.24),
+    0 10px 24px rgba(36,43,53,.14),
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 0 18px rgba(255,255,255,.30)!important;
+}
+.recommend-window .carousel-button:active{transform:translateY(0) scale(.98)!important}
+@media(max-width:600px){.recommend-window .carousel-button{display:none!important}}
