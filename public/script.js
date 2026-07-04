@@ -75,17 +75,24 @@ async function initHome() {
     keepHeroPlaying();
   }
 
-  recommended = home.recommended.length ? home.recommended : home.featured;
+  recommended = home.recommended.length ? home.recommended : (home.featured.length ? home.featured : (home.database_preview || []));
   recommendVirtualItems = recommended.length > 1 ? [...recommended, ...recommended, ...recommended] : [...recommended];
   recommendIndex = recommended.length > 1 ? recommended.length : 0;
-  document.querySelector("#recommend-track").innerHTML = recommendVirtualItems.map((project, index) => {
+  document.querySelector("#recommend-track").innerHTML = recommendVirtualItems.map((item, index) => {
     const realIndex = recommended.length ? index % recommended.length : index;
+    const isMedia = !item.cover_image && item.file_path;
+    const title = item.title || item.original_name || "未命名作品";
+    const subtitle = item.subtitle || item.description || item.category_name || "MEDIA ARCHIVE";
+    const mediaPath = item.cover_image || item.file_path || "";
+    const mediaType = item.media_type || item.file_type || "image";
+    const href = isMedia ? `/works.html?category=${encodeURIComponent(item.category_slug || "all")}` : `/project.html?id=${item.id}`;
     return `
-    <a class="recommend-card ${index === 0 ? "current" : ""}" href="/project.html?id=${project.id}">
-      <div class="card-media ${fallbackCovers[(realIndex + 2) % fallbackCovers.length]}">${mediaMarkup(project.cover_image, "image", project.title)}</div>
-      <div class="recommend-info"><b>${String(realIndex + 1).padStart(2, "0")}</b><div><h3>${escapeHtml(project.title)}</h3><p>${escapeHtml(project.subtitle)}</p></div></div>
+    <a class="recommend-card ${index === recommendIndex ? "current" : ""}" href="${href}">
+      <div class="card-media ${fallbackCovers[(realIndex + 2) % fallbackCovers.length]}">${mediaMarkup(mediaPath, mediaType, title)}</div>
+      <div class="recommend-info"><b>${String(realIndex + 1).padStart(2, "0")}</b><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div></div>
     </a>`;
   }).join("");
+  document.querySelector(".recommend-window")?.classList.toggle("is-empty", !recommended.length);
   updateRecommend();
 
   const inspirationChannels = [
