@@ -58,7 +58,7 @@ async function uploadFileDirectToSupabase(file){
   const body=new FormData();
   body.append("cacheControl","3600");
   body.append("",file);
-  const response=await fetch(signed.signed_url,{method:"PUT",body});
+  const response=await fetch(signed.signed_url,{method:"PUT",headers:signed.upload_headers||{},body});
   if(!response.ok){const detail=await response.text().catch(()=>"");throw new Error(`Supabase video upload failed: ${response.status} ${detail}`);}
   return signed;
 }
