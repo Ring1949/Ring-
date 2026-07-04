@@ -23,7 +23,7 @@ export function getSupabaseAdmin(): SupabaseClient {
   if (serviceClient) return serviceClient;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY. 后台上传图片/视频需要服务端 service role key，或需要在 Supabase Storage 为 anon 配置上传策略。");
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY. Admin uploads require a Supabase service role key or a valid Storage upload policy.");
   }
   serviceClient = createClient(getSupabaseUrl(), serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
