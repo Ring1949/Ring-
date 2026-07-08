@@ -160,5 +160,30 @@ function setupLanguageToggle(){
   apply();
 }
 
+function setupThemeToggle(){
+  const host=document.querySelector(".nav-actions")||document.querySelector(".works-nav")||document.querySelector(".main-nav");
+  if(!host||host.querySelector(".theme-toggle"))return;
+  const button=document.createElement("button");
+  button.className="theme-toggle";
+  button.type="button";
+  button.setAttribute("aria-label","切换日间 / 夜间模式");
+  const target=host.querySelector(".admin-login-trigger")||host.querySelector(".menu-button")||null;
+  const getTheme=()=>localStorage.getItem("site-theme")||"light";
+  const apply=()=>{
+    const theme=getTheme();
+    document.documentElement.dataset.theme=theme;
+    button.dataset.theme=theme;
+    button.innerHTML=theme==="dark"?"<span>☾</span>":"<span>☼</span>";
+    button.setAttribute("aria-pressed",String(theme==="dark"));
+    button.setAttribute("title",theme==="dark"?"切换到白天":"切换到黑夜");
+  };
+  button.addEventListener("click",()=>{
+    localStorage.setItem("site-theme",getTheme()==="dark"?"light":"dark");
+    apply();
+  });
+  if(target)host.insertBefore(button,target);else host.appendChild(button);
+  apply();
+}
 setupAdminLogin();
+setupThemeToggle();
 setupLanguageToggle();
