@@ -1,8 +1,13 @@
-"use client";
+﻿"use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import styles from "./ContactLanyardOverlay.module.css";
-import Lanyard from "./Lanyard";
+
+const Lanyard = dynamic(() => import("./Lanyard"), {
+  ssr: false,
+  loading: () => <div className={styles.lanyardLoading}>LANYARD</div>
+});
 
 const contactMethods = [
   { label: "PHONE", value: "18569569185", href: "tel:18569569185" },
@@ -56,12 +61,12 @@ export default function ContactLanyardOverlay() {
       </button>
       <div className={styles.left}>
         <div className={styles.ceiling} />
-        <Lanyard />
+        <Lanyard position={[0, 0, 24]} gravity={[0, -40, 0]} />
       </div>
       <aside className={styles.info}>
         <p>CONTACT CARD</p>
         <h2>一起做点什么</h2>
-        <span>这里是 RING 的联系入口。左侧先复刻员工吊牌的结构与质感：挂绳、金属夹、透明厚卡和轻微可拖拽摆动。</span>
+        <span>这里是 RING 的联系入口。左侧已经替换为 React Bits 原版 Lanyard 物理吊牌。</span>
         <div className={styles.methods}>
           {contactMethods.map((item) =>
             item.href ? (
@@ -84,4 +89,3 @@ export default function ContactLanyardOverlay() {
     </section>
   );
 }
-
