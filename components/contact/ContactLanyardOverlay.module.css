@@ -1,4 +1,4 @@
-.overlay {
+﻿.overlay {
   position: fixed;
   inset: 0;
   z-index: 5000;
@@ -6,7 +6,22 @@
   grid-template-columns: minmax(360px, 54vw) minmax(320px, 46vw);
   overflow: hidden;
   color: #15171a;
-  background: radial-gradient(circle at 14% 10%, rgba(225, 232, 244, 0.62), transparent 32%), linear-gradient(180deg, #ffffff 0%, #f7f7f4 100%);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.96), transparent 36%),
+    radial-gradient(circle at 74% 22%, rgba(225, 232, 244, 0.48), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #f6f7f4 100%);
+}
+
+.overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(25, 29, 35, 0.11) 0 1px, transparent 1.35px);
+  background-size: 19px 19px;
+  opacity: 0.13;
+  mask-image: linear-gradient(#000, transparent 86%);
 }
 
 .close {
@@ -30,19 +45,10 @@
 
 .left {
   position: relative;
+  z-index: 1;
   min-height: 100vh;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.96), transparent 35%), linear-gradient(180deg, #fbfbfa 0%, #eff1ee 100%);
-}
-
-.left::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(25, 29, 35, 0.12) 0 1px, transparent 1.35px);
-  background-size: 19px 19px;
-  opacity: 0.16;
-  mask-image: linear-gradient(#000, transparent 82%);
+  background: transparent;
 }
 
 .ceiling {
@@ -52,11 +58,13 @@
   right: 0;
   z-index: 2;
   height: 18px;
-  background: linear-gradient(180deg, #e9e9e6, rgba(255, 255, 255, 0.9));
-  box-shadow: 0 12px 34px rgba(20, 24, 30, 0.1);
+  background: linear-gradient(180deg, rgba(233, 233, 230, 0.74), rgba(255, 255, 255, 0.42));
+  box-shadow: 0 12px 34px rgba(20, 24, 30, 0.08);
 }
 
 .info {
+  position: relative;
+  z-index: 1;
   align-self: center;
   width: min(520px, 82%);
   padding: 0 6vw;

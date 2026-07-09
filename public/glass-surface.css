@@ -1,4 +1,4 @@
-/* React Bits GlassSurface adapted for this static site.
+﻿/* React Bits GlassSurface adapted for this static site.
    Applies a shared refractive glass material to button-like controls. */
 
 :root{
@@ -317,3 +317,71 @@ dialog .close{
 }
 .recommend-window .carousel-button:active{transform:translateY(0) scale(.98)!important}
 @media(max-width:600px){.recommend-window .carousel-button{display:none!important}}
+#contact-link{
+  min-height:52px;
+  padding:0 26px;
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px!important;
+  border:1px solid rgba(255,255,255,.82)!important;
+  color:#2f3440!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.78),rgba(244,248,253,.42) 52%,rgba(224,233,245,.24)),
+    rgba(255,255,255,.36)!important;
+  box-shadow:
+    0 18px 46px rgba(65,78,98,.14),
+    0 7px 18px rgba(65,78,98,.08),
+    inset 0 1px 0 rgba(255,255,255,.96),
+    inset 0 -1px 0 rgba(142,156,185,.22),
+    inset 0 0 18px rgba(255,255,255,.34)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(1.48) brightness(1.04);
+  backdrop-filter:blur(20px) saturate(1.48) brightness(1.04);
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  font-size:14px;
+  font-weight:760;
+  letter-spacing:.035em;
+  line-height:1;
+  text-align:center;
+  text-decoration:none!important;
+  text-shadow:0 1px 1px rgba(255,255,255,.72);
+  transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease, color .22s ease;
+}
+#contact-link::before{
+  content:"";
+  position:absolute;
+  z-index:-2;
+  inset:1px;
+  border-radius:inherit;
+  background:
+    radial-gradient(ellipse at 26% 18%,rgba(255,255,255,.9),transparent 34%),
+    radial-gradient(ellipse at 77% 78%,rgba(126,188,255,.24),transparent 32%),
+    radial-gradient(ellipse at 50% 96%,rgba(255,176,111,.18),transparent 34%);
+  pointer-events:none;
+}
+#contact-link::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  left:14%;
+  right:14%;
+  top:7px;
+  height:1px;
+  border-radius:999px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);
+  pointer-events:none;
+}
+#contact-link:hover{
+  color:#222833!important;
+  transform:translateY(-2px);
+  border-color:rgba(255,255,255,.94)!important;
+  box-shadow:
+    0 24px 60px rgba(67,78,96,.18),
+    0 10px 24px rgba(67,78,96,.10),
+    inset 0 1px 0 rgba(255,255,255,.98),
+    inset 0 -1px 0 rgba(160,174,205,.22),
+    inset 0 0 22px rgba(255,255,255,.42)!important;
+}
+
