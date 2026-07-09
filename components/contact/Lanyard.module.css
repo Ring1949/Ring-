@@ -9,3 +9,355 @@
   transform: scale(1);
   transform-origin: center;
 }
+
+.stage {
+  --drag-x: 0px;
+  --drag-y: 0px;
+  --swing: 0deg;
+  position: relative;
+  width: min(560px, 92vw);
+  height: 100vh;
+  min-height: 680px;
+  display: grid;
+  place-items: center;
+  perspective: 1500px;
+  user-select: none;
+  touch-action: none;
+}
+
+.anchor {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 5;
+  width: 170px;
+  height: 18px;
+  transform: translateX(-50%);
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, #d6d8d8, #f9faf8 62%, #c6cacd);
+  box-shadow: 0 14px 32px rgba(30, 34, 38, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.cord {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  z-index: 2;
+  width: 270px;
+  height: 360px;
+  transform: translateX(calc(-50% + var(--drag-x) * 0.08)) rotate(calc(var(--swing) * 0.16));
+  transform-origin: 50% 0;
+  filter: drop-shadow(0 18px 20px rgba(20, 24, 30, 0.16));
+  transition: transform 0.58s cubic-bezier(.2,.8,.2,1);
+  pointer-events: none;
+}
+
+.cord span {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 18% 72%, rgba(255, 255, 255, 0.18)),
+    repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 3px, transparent 3px 8px),
+    linear-gradient(90deg, #11151d, #3b4350 46%, #0e1219 100%);
+  box-shadow: inset 3px 0 6px rgba(255,255,255,.16), inset -4px 0 8px rgba(0,0,0,.28);
+}
+
+.cordLeft,
+.cordRight {
+  top: 0;
+  width: 22px;
+  height: 352px;
+}
+
+.cordLeft {
+  left: 54px;
+  transform: rotate(-15deg);
+  transform-origin: 50% 0;
+}
+
+.cordRight {
+  right: 54px;
+  transform: rotate(15deg);
+  transform-origin: 50% 0;
+}
+
+.cordCrossA,
+.cordCrossB {
+  top: 128px;
+  width: 118px;
+  height: 22px;
+}
+
+.cordCrossA {
+  left: 39px;
+  transform: rotate(27deg);
+}
+
+.cordCrossB {
+  right: 39px;
+  transform: rotate(-27deg);
+}
+
+.shadow {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 254px);
+  z-index: 0;
+  width: 330px;
+  height: 54px;
+  transform: translateX(calc(-50% + var(--drag-x) * 0.16));
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.18);
+  filter: blur(24px);
+  opacity: 0.58;
+  transition: transform 0.58s cubic-bezier(.2,.8,.2,1), opacity .28s ease;
+}
+
+.badgeRig {
+  position: relative;
+  z-index: 4;
+  margin-top: 98px;
+  transform-style: preserve-3d;
+  cursor: grab;
+  animation: badgeDrop 1.18s cubic-bezier(.2,.82,.18,1.16) both, idleSwing 5.8s ease-in-out 1.22s infinite;
+  transition: transform 0.62s cubic-bezier(.2,.84,.22,1.08);
+  will-change: transform;
+}
+
+.badgeRig.dragging {
+  cursor: grabbing;
+  animation: none;
+  transition: none;
+}
+
+.clipTop {
+  position: absolute;
+  left: 50%;
+  top: -66px;
+  z-index: 5;
+  width: 124px;
+  height: 72px;
+  transform: translateX(-50%) translateZ(40px);
+  border-radius: 24px 24px 18px 18px;
+  background:
+    radial-gradient(circle at 34% 20%, rgba(255,255,255,.95), transparent 24%),
+    linear-gradient(135deg, #f5f7f7 0%, #aeb6bf 46%, #747d89 58%, #eef1f2 100%);
+  box-shadow: 0 19px 34px rgba(24, 28, 34, 0.22), inset 0 1px 0 rgba(255,255,255,.95), inset 0 -5px 12px rgba(51,58,68,.22);
+}
+
+.clipTop::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  width: 56px;
+  height: 18px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f8faf9, #c5cbd0);
+  box-shadow: inset 0 3px 7px rgba(20,24,28,.24), 0 1px rgba(255,255,255,.85);
+}
+
+.clipTop span {
+  position: absolute;
+  left: 50%;
+  bottom: -20px;
+  width: 44px;
+  height: 28px;
+  transform: translateX(-50%);
+  border-radius: 0 0 13px 13px;
+  background: linear-gradient(180deg, #7c8490, #cbd0d4 48%, #8d96a0);
+  box-shadow: inset 0 1px rgba(255,255,255,.55);
+}
+
+.badge {
+  position: relative;
+  width: 318px;
+  min-height: 486px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 38px;
+  background:
+    linear-gradient(122deg, rgba(255,255,255,.62), rgba(255,255,255,0) 32%, rgba(174,191,212,.18) 68%, rgba(255,255,255,.44)),
+    linear-gradient(145deg, rgba(255,255,255,.94), rgba(235,238,239,.82));
+  box-shadow:
+    0 44px 92px rgba(16, 22, 30, 0.26),
+    0 16px 28px rgba(16, 22, 30, 0.12),
+    inset 0 1px 0 rgba(255,255,255,.96),
+    inset 0 -1px 0 rgba(120,130,145,.14);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  backdrop-filter: blur(22px) saturate(1.08);
+  transform: translateZ(18px);
+}
+
+.badge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  background:
+    linear-gradient(116deg, rgba(255,255,255,.82) 0%, rgba(255,255,255,.34) 16%, rgba(255,255,255,0) 34%),
+    radial-gradient(circle at 88% 12%, rgba(170, 206, 255, .2), transparent 26%),
+    radial-gradient(circle at 18% 96%, rgba(255, 198, 162, .19), transparent 28%);
+  mix-blend-mode: screen;
+}
+
+.badge::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: 7;
+  border-radius: 37px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.42), inset 0 0 34px rgba(255,255,255,.42);
+}
+
+.badgeHole {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  z-index: 9;
+  width: 72px;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(215, 220, 224, .62);
+  box-shadow: inset 0 3px 8px rgba(36,42,48,.18), 0 1px rgba(255,255,255,.9);
+}
+
+.badgeGlass {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 10% 18%, rgba(255,255,255,.48) 0 1px, transparent 1.6px);
+  background-size: 28px 28px;
+  opacity: .25;
+}
+
+.photoWrap {
+  position: relative;
+  z-index: 2;
+  height: 302px;
+  margin: 50px 18px 0;
+  overflow: hidden;
+  border-radius: 29px;
+  background: #d8dcdf;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.62), 0 18px 34px rgba(23,29,36,.12);
+}
+
+.photoWrap img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 34%;
+  filter: saturate(.92) contrast(1.03) brightness(1.02);
+  pointer-events: none;
+}
+
+.cardBody {
+  position: relative;
+  z-index: 2;
+  padding: 19px 23px 25px;
+  color: #17191d;
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 13px;
+}
+
+.logoRow img {
+  width: 62px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.logoRow span {
+  color: #a6abb0;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .22em;
+}
+
+.cardBody p {
+  margin: 0 0 4px;
+  color: #9fa4a9;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .24em;
+}
+
+.cardBody h3 {
+  margin: 0 0 18px;
+  font-size: 50px;
+  line-height: .9;
+  font-weight: 900;
+  letter-spacing: -.055em;
+}
+
+.cardBody dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.cardBody dl div {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.cardBody dt {
+  color: #a3a8ad;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+.cardBody dd {
+  margin: 0;
+  color: #282c31;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@keyframes badgeDrop {
+  0% { transform: translate3d(0, -112vh, 0) rotateZ(-12deg) rotateX(14deg); }
+  58% { transform: translate3d(0, 34px, 0) rotateZ(5.4deg) rotateX(-5deg); }
+  76% { transform: translate3d(0, -15px, 0) rotateZ(-3deg); }
+  100% { transform: translate3d(0, 0, 0) rotateZ(0deg); }
+}
+
+@keyframes idleSwing {
+  0%, 100% { transform: translate3d(0, 0, 0) rotateZ(-1.2deg) rotateX(0deg); }
+  50% { transform: translate3d(0, 3px, 0) rotateZ(1.2deg) rotateX(1.1deg); }
+}
+
+@media (max-width: 860px) {
+  .stage {
+    min-height: 620px;
+    height: 620px;
+  }
+
+  .badge {
+    width: 292px;
+    min-height: 454px;
+    border-radius: 34px;
+  }
+
+  .photoWrap {
+    height: 276px;
+  }
+
+  .cardBody h3 {
+    font-size: 45px;
+  }
+}

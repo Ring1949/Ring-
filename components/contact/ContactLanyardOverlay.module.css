@@ -6,7 +6,7 @@
   grid-template-columns: minmax(360px, 54vw) minmax(320px, 46vw);
   overflow: hidden;
   color: #15171a;
-  background: radial-gradient(circle at 18% 16%, rgba(225, 232, 244, 0.62), transparent 30%), linear-gradient(180deg, #ffffff 0%, #f7f7f4 100%);
+  background: radial-gradient(circle at 14% 10%, rgba(225, 232, 244, 0.62), transparent 32%), linear-gradient(180deg, #ffffff 0%, #f7f7f4 100%);
 }
 
 .close {
@@ -39,7 +39,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(25, 29, 35, 0.13) 0 1px, transparent 1.4px);
+  background-image: radial-gradient(circle, rgba(25, 29, 35, 0.12) 0 1px, transparent 1.35px);
   background-size: 19px 19px;
   opacity: 0.16;
   mask-image: linear-gradient(#000, transparent 82%);
