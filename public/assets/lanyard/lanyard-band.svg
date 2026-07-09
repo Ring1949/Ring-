@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="96" viewBox="0 0 512 96">
+  <defs><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#555d6a"/><stop offset="0.42" stop-color="#11151c"/><stop offset="1" stop-color="#2a303a"/></linearGradient></defs>
+  <rect width="512" height="96" rx="18" fill="url(#b)"/>
+  <path d="M0 16 H512" stroke="#ffffff" stroke-opacity="0.16" stroke-width="3"/>
+  <path d="M0 78 H512" stroke="#000000" stroke-opacity="0.34" stroke-width="4"/>
+  <g font-family="Manrope, Arial, sans-serif" font-size="28" font-weight="900" letter-spacing="6" fill="#ffffff" fill-opacity="0.32">
+    <text x="28" y="58">RING</text><text x="178" y="58">RING</text><text x="328" y="58">RING</text>
+  </g>
+</svg>

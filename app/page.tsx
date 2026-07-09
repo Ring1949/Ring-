@@ -1,5 +1,6 @@
 import Script from "next/script";
 import { readLegacyBody } from "@/lib/legacy-html";
+import ContactLanyardOverlay from "@/components/contact/ContactLanyardOverlay";
 
 export default function HomePage() {
   const bodyHtml = readLegacyBody("index.html");
@@ -11,6 +12,7 @@ export default function HomePage() {
       <link rel="stylesheet" href="/styles.css?v=20260704-2" />
       <link rel="stylesheet" href="/glass-surface.css?v=20260704-1" />
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+      <ContactLanyardOverlay />
       <Script src="/glass-surface.js?v=20260702-1" strategy="afterInteractive" />
       <Script src="/common.js?v=20260623-1" strategy="afterInteractive" />
       <Script src="/script.js?v=20260704-2" strategy="afterInteractive" />
