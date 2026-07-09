@@ -61,7 +61,13 @@ export default function ContactLanyardOverlay() {
       </button>
       <div className={styles.left}>
         <div className={styles.ceiling} />
-        <Lanyard position={[0, 0, 24]} gravity={[0, -40, 0]} />
+        <Lanyard
+          position={[0, 0, 24]}
+          gravity={[0, -40, 0]}
+          frontImage="/assets/lanyard/ring-contact-front.svg"
+          backImage="/assets/lanyard/ring-contact-back.svg"
+          lanyardImage="/assets/lanyard/ring-lanyard.png"
+        />
       </div>
       <aside className={styles.info}>
         <p>CONTACT CARD</p>
@@ -89,3 +95,4 @@ export default function ContactLanyardOverlay() {
     </section>
   );
 }
+
