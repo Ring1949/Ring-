@@ -34,10 +34,11 @@ async function initHome() {
       settings.instagram && ["Instagram","查看主页",settings.instagram],
       settings.behance && ["Behance","查看主页",settings.behance]
     ].filter(Boolean);
-    overlay.innerHTML = `<section class="contact-dialog contact-dialog-lanyard" role="dialog" aria-modal="true"><button class="contact-dialog-close" type="button">×</button>
-      <div class="lanyard-stage" aria-label="RING 联系吊牌">
-        <div class="lanyard-cord"><i></i><i></i></div>
-        <article class="lanyard-badge">
+    overlay.innerHTML = `<section class="contact-fullscreen" role="dialog" aria-modal="true"><button class="contact-dialog-close contact-fullscreen-close" type="button">×</button>
+      <div class="contact-lanyard-zone" aria-label="RING 工作证">
+        <div class="contact-ceiling"></div>
+        <div class="lanyard-cord contact-cord"><i></i><i></i></div>
+        <article class="lanyard-badge contact-draggable-badge">
           <div class="lanyard-clip"><span></span></div>
           <div class="lanyard-photo"><img src="/assets/ring-profile-lanyard.jpg" alt="RING"></div>
           <div class="lanyard-info">
@@ -49,24 +50,25 @@ async function initHome() {
           </div>
         </article>
       </div>
-      <div class="contact-panel"><p>CONTACT / SHANCHUAN</p><h2>${escapeHtml(settings.contact_title||"联系我")}</h2>
+      <aside class="contact-fullscreen-info"><p>CONTACT</p><h2>${escapeHtml(settings.contact_title||"联系我")}</h2>
       <span>${escapeHtml(settings.contact_intro||"如果你想聊聊新的合作，可以通过下面的方式找到我。")}</span>
       ${settings.contact_location?`<small>${escapeHtml(settings.contact_location)}</small>`:""}
-      <div class="contact-methods">${methods.map(([label,value,href])=>href?`<a href="${escapeHtml(href)}" ${href.startsWith("http")?'target="_blank" rel="noreferrer"':""}><b>${label}</b><span>${escapeHtml(value)}</span><i>↗</i></a>`:`<button type="button" data-copy-contact="${escapeHtml(value)}"><b>${label}</b><span>${escapeHtml(value)}</span><i>复制</i></button>`).join("")}</div><div class="contact-copy-status"></div></div></section>`;    overlay.onclick = async (e) => { if(e.target===overlay||e.target.closest(".contact-dialog-close")) overlay.remove(); const copy=e.target.closest("[data-copy-contact]"); if(copy){await navigator.clipboard.writeText(copy.dataset.copyContact);overlay.querySelector(".contact-copy-status").textContent="已复制到剪贴板";} };
+      <div class="contact-methods">${methods.map(([label,value,href])=>href?`<a href="${escapeHtml(href)}" ${href.startsWith("http")?'target="_blank" rel="noreferrer"':""}><b>${label}</b><span>${escapeHtml(value)}</span><i>↗</i></a>`:`<button type="button" data-copy-contact="${escapeHtml(value)}"><b>${label}</b><span>${escapeHtml(value)}</span><i>复制</i></button>`).join("")}</div><div class="contact-copy-status"></div></aside></section>`;    overlay.onclick = async (e) => { if(e.target===overlay||e.target.closest(".contact-dialog-close")) overlay.remove(); const copy=e.target.closest("[data-copy-contact]"); if(copy){await navigator.clipboard.writeText(copy.dataset.copyContact);overlay.querySelector(".contact-copy-status").textContent="已复制到剪贴板";} };
     document.body.appendChild(overlay);
-    const badge = overlay.querySelector(".lanyard-badge");
-    badge?.addEventListener("pointermove", (event) => {
-      const rect = badge.getBoundingClientRect();
-      const px = (event.clientX - rect.left) / rect.width - .5;
-      const py = (event.clientY - rect.top) / rect.height - .5;
-      badge.style.setProperty("--lanyard-ry", `${px * 10}deg`);
-      badge.style.setProperty("--lanyard-rx", `${py * -8}deg`);
-    });
-    badge?.addEventListener("pointerleave", () => {
-      badge.style.setProperty("--lanyard-ry", "0deg");
-      badge.style.setProperty("--lanyard-rx", "0deg");
-    });
-  };
+    const badge = overlay.querySelector(".contact-draggable-badge");
+    const cord = overlay.querySelector(".contact-cord");
+    let dragging=false, startX=0, startY=0, dx=0, dy=0;
+    const applyBadge=()=>{
+      badge.style.setProperty("--drag-x", `${dx}px`);
+      badge.style.setProperty("--drag-y", `${dy}px`);
+      badge.style.setProperty("--lanyard-ry", `${dx * .035}deg`);
+      badge.style.setProperty("--lanyard-rx", `${dy * -.02}deg`);
+      cord.style.setProperty("--cord-rotate", `${dx * .018}deg`);
+    };
+    badge?.addEventListener("pointerdown",(event)=>{dragging=true;badge.setPointerCapture(event.pointerId);startX=event.clientX-dx;startY=event.clientY-dy;badge.classList.add("is-dragging");});
+    badge?.addEventListener("pointermove",(event)=>{if(!dragging)return;dx=(event.clientX-startX)*.72;dy=Math.max(-70,Math.min(170,(event.clientY-startY)*.72));applyBadge();});
+    badge?.addEventListener("pointerup",()=>{dragging=false;dx=0;dy=0;badge.classList.remove("is-dragging");applyBadge();});
+    badge?.addEventListener("pointercancel",()=>{dragging=false;dx=0;dy=0;badge.classList.remove("is-dragging");applyBadge();});  };
   document.querySelector("#footer-email").textContent = `EMAIL · ${settings.contact_email || ""}`;
   document.querySelector("#footer-logo").textContent = settings.site_name || "山川止行";
   document.querySelector("#footer-text").textContent = settings.footer_text || "";
@@ -120,16 +122,39 @@ async function initHome() {
   updateRecommend();
 
   const inspirationChannels = [
-    ["摄影","PHOTOGRAPHY","●"],["平面","GRAPHIC","◆"],
-    ["空间","SPACE","□"],["AI","GENERATIVE","✦"],["其他","OTHER","＋"]
+    ["摄影","PHOTOGRAPHY","photo"],["平面","GRAPHIC","graphic"],
+    ["空间","SPACE","space"],["AI","GENERATIVE","ai"],["其他","OTHER","other"]
   ];
-  document.querySelector("#channel-list").innerHTML = inspirationChannels.map(([name,label,icon], index) => `
-    <a class="channel" href="/inspiration.html">
-      <div class="channel-index">0${index+1}</div><div class="channel-icon">${icon}</div>
-      <h3>${name}</h3><p>${label} · 尚未添加内容</p><span>进入灵感库 ↗</span>
-    </a>`).join("");
+  document.querySelector("#channel-list").innerHTML = inspirationChannels.map(([name,label,slug], index) => `
+    <button class="channel" type="button" data-explore-channel="${slug}">
+      <div class="channel-index">0${index+1}</div><div class="channel-icon">•</div>
+      <h3>${name}</h3><p>${label}</p><span>进入探索模式 ↗</span>
+    </button>`).join("");
+  setupHomeExploreChannels();
 }
 
+
+function setupHomeExploreChannels(){
+  document.querySelectorAll("[data-explore-channel]").forEach((button)=>{
+    button.addEventListener("click",(event)=>{
+      event.preventDefault();
+      const slug=button.dataset.exploreChannel;
+      if(slug!=="photo"){ location.href="/inspiration.html"; return; }
+      openHomeExploreMode();
+    });
+  });
+}
+
+async function openHomeExploreMode(){
+  const old=document.querySelector(".home-explore-overlay"); if(old) old.remove();
+  document.querySelector(".nav")?.classList.add("nav-hidden-explore");
+  const overlay=document.createElement("section");
+  overlay.className="home-explore-overlay";
+  const secondary=["Humanity","News","Landscape","Commercial","Portrait","Campus","Documentary","Travel"];
+  overlay.innerHTML=`<button class="home-explore-close" type="button">Exit</button><div class="home-explore-stars"></div><div class="home-explore-center"><i></i><b>Photography</b></div><svg class="home-explore-lines" viewBox="0 0 100 100" preserveAspectRatio="none">${secondary.map((_,i)=>{const a=(i/secondary.length)*Math.PI*2-Math.PI/2;const x=50+Math.cos(a)*31;const y=50+Math.sin(a)*23;return `<line x1="50" y1="50" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}"></line>`}).join("")}</svg>${secondary.map((name,i)=>{const a=(i/secondary.length)*Math.PI*2-Math.PI/2;const x=50+Math.cos(a)*31;const y=50+Math.sin(a)*23;return `<a class="home-explore-node" href="/inspiration.html" style="left:${x}%;top:${y}%;--d:${i*.08}s"><i></i><span>${name}</span></a>`}).join("")}`;
+  overlay.querySelector(".home-explore-close").addEventListener("click",()=>{overlay.remove();document.querySelector(".nav")?.classList.remove("nav-hidden-explore");});
+  document.body.appendChild(overlay);
+}
 function projectCard(project, index, main) {
   return `<a class="project-card ${main ? "project-main" : ""}" href="/project.html?id=${project.id}">
     <div class="card-media ${fallbackCovers[index % fallbackCovers.length]}">${mediaMarkup(project.cover_image, "image", project.title)}</div>
