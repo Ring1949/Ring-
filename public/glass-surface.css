@@ -385,3 +385,68 @@ dialog .close{
     inset 0 0 22px rgba(255,255,255,.42)!important;
 }
 
+
+/* Minimal text-line controls: language + day/night toggles should not use glass buttons. */
+.language-toggle,
+.theme-toggle{
+  width:auto!important;
+  min-width:0!important;
+  height:auto!important;
+  padding:0 0 3px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border:0!important;
+  border-bottom:1px solid currentColor!important;
+  border-radius:0!important;
+  color:inherit!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  filter:none!important;
+  overflow:visible!important;
+  isolation:auto!important;
+  font-size:11px!important;
+  font-weight:600!important;
+  letter-spacing:.14em!important;
+  line-height:1.15!important;
+  text-transform:uppercase!important;
+  cursor:pointer!important;
+  transition:opacity .2s ease, border-color .2s ease!important;
+}
+.language-toggle::before,
+.language-toggle::after,
+.theme-toggle::before,
+.theme-toggle::after{
+  display:none!important;
+  content:none!important;
+}
+.theme-toggle span{
+  position:static!important;
+  z-index:auto!important;
+  font-size:11px!important;
+  line-height:1.15!important;
+  transform:none!important;
+  transition:none!important;
+}
+.language-toggle:hover,
+.theme-toggle:hover{
+  opacity:.55!important;
+  transform:none!important;
+  box-shadow:none!important;
+}
+.language-toggle:focus-visible,
+.theme-toggle:focus-visible{
+  outline:1px solid currentColor!important;
+  outline-offset:5px!important;
+}
+.nav-scrolled .language-toggle,
+.nav-scrolled .theme-toggle,
+:root[data-theme="dark"] .language-toggle,
+:root[data-theme="dark"] .theme-toggle{
+  color:inherit!important;
+  border-color:currentColor!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}

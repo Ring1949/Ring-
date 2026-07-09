@@ -17,6 +17,36 @@ function notify(message, error = false) {
 const formDataObject = (form) => Object.fromEntries(new FormData(form));
 const optionList = (items, selected, empty = "未选择") => `<option value="">${empty}</option>${items.map((item) => `<option value="${item.id}" ${String(item.id)===String(selected)?"selected":""}>${escapeHtml(item.name || item.title)}</option>`).join("")}`;
 
+async function uploadHeroBackgroundFile(file) {
+  const signed = await request("/api/media/upload-sign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size })
+  });
+  const body = new FormData();
+  body.append("cacheControl", "3600");
+  body.append("", file);
+  const uploadResponse = await fetch(signed.signed_url, {
+    method: "PUT",
+    headers: signed.upload_headers || {},
+    body
+  });
+  if (!uploadResponse.ok) {
+    const detail = await uploadResponse.text().catch(() => "");
+    throw new Error(`Hero file upload failed: ${uploadResponse.status} ${detail}`.trim());
+  }
+  return request("/api/media/direct-record", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "首页全屏背景",
+      is_hero: true,
+      show_in_database: false,
+      files: [signed]
+    })
+  });
+}
+
 async function bootstrap() {
   const me = await request("/api/me");
   if (!me.authenticated) {
@@ -60,12 +90,7 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
     data.delete("hero_background_file");
     state.settings = await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(data))});
     if (heroFile?.size) {
-      const upload = new FormData();
-      upload.append("files", heroFile);
-      upload.append("title", "首页全屏背景");
-      upload.append("is_hero", "true");
-      upload.append("show_in_database", "false");
-      await request("/api/media/upload",{method:"POST",body:upload});
+      await uploadHeroBackgroundFile(heroFile);
       event.target.hero_background_file.value = "";
       document.querySelector("#hero-file-name").textContent = "未选择新文件时，保留当前背景";
       document.querySelector("#hero-file-preview").innerHTML = "";

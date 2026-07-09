@@ -134,12 +134,12 @@ function setupLanguageToggle(){
   const button=document.createElement("button");
   button.className="language-toggle";
   button.type="button";
-  button.setAttribute("aria-label","切换中英文");
+  button.setAttribute("aria-label","Toggle language");
   actions.insertBefore(button,actions.querySelector(".admin-login-trigger"));
   const apply=()=>{
     const english=localStorage.getItem("site-language")==="en";
     document.documentElement.lang=english?"en":"zh-CN";
-    button.textContent=english?"中":"EN";
+    button.textContent=english?"CN":"EN";
     document.querySelectorAll("body *:not(script):not(style):not(.language-toggle)").forEach((element)=>{
       if(element.children.length)return;
       const value=element.textContent.trim();
@@ -166,16 +166,16 @@ function setupThemeToggle(){
   const button=document.createElement("button");
   button.className="theme-toggle";
   button.type="button";
-  button.setAttribute("aria-label","切换日间 / 夜间模式");
+  button.setAttribute("aria-label","Toggle theme");
   const target=host.querySelector(".admin-login-trigger")||host.querySelector(".menu-button")||null;
   const getTheme=()=>localStorage.getItem("site-theme")||"light";
   const apply=()=>{
     const theme=getTheme();
     document.documentElement.dataset.theme=theme;
     button.dataset.theme=theme;
-    button.innerHTML=theme==="dark"?"<span>☾</span>":"<span>☼</span>";
+    button.innerHTML=theme==="dark"?"<span>LIGHT</span>":"<span>DARK</span>";
     button.setAttribute("aria-pressed",String(theme==="dark"));
-    button.setAttribute("title",theme==="dark"?"切换到白天":"切换到黑夜");
+    button.setAttribute("title",theme==="dark"?"Switch to light":"Switch to dark");
   };
   button.addEventListener("click",()=>{
     localStorage.setItem("site-theme",getTheme()==="dark"?"light":"dark");
