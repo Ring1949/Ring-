@@ -9,6 +9,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try { document.documentElement.dataset.theme = localStorage.getItem('site-theme') || 'light'; } catch (_) {}`
+          }}
+        />
+      </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
   );

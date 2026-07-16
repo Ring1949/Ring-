@@ -22,53 +22,7 @@ async function initHome() {
   document.querySelector("#about-text").textContent = settings.about_text || "";
   document.querySelector("#contact-link").textContent = settings.contact_button_text || "一起做点什么 ↗";
   document.querySelector("#contact-link").href = "#contact";
-  document.querySelector("#contact-link").onclick = (event) => {
-    event.preventDefault();
-    const old = document.querySelector(".contact-overlay"); if (old) old.remove();
-    const overlay = document.createElement("div"); overlay.className = "contact-overlay";
-    const methods = [
-      ["电话","18569569185","tel:18569569185"],
-      settings.contact_email && ["邮箱",settings.contact_email,`mailto:${settings.contact_email}`],
-      settings.wechat && ["微信",settings.wechat,""],
-      settings.xiaohongshu && ["小红书","查看主页",settings.xiaohongshu],
-      settings.instagram && ["Instagram","查看主页",settings.instagram],
-      settings.behance && ["Behance","查看主页",settings.behance]
-    ].filter(Boolean);
-    overlay.innerHTML = `<section class="contact-fullscreen" role="dialog" aria-modal="true"><button class="contact-dialog-close contact-fullscreen-close" type="button">×</button>
-      <div class="contact-lanyard-zone" aria-label="RING 工作证">
-        <div class="contact-ceiling"></div>
-        <div class="lanyard-cord contact-cord"><i></i><i></i></div>
-        <article class="lanyard-badge contact-draggable-badge">
-          <div class="lanyard-clip"><span></span></div>
-          <div class="lanyard-photo"><img src="/assets/ring-profile-lanyard.jpg" alt="RING"></div>
-          <div class="lanyard-info">
-            <img class="lanyard-logo" src="/assets/ring-logo-transparent.png" alt="Ring logo">
-            <small>SHANCHUAN VISUAL ARCHIVE</small>
-            <h3>RING</h3>
-            <p>独立设计师 / 摄影 / 视觉创作者</p>
-            <dl><dt>TEL</dt><dd><a href="tel:18569569185">18569569185</a></dd><dt>ROLE</dt><dd>Portfolio Owner</dd><dt>BASE</dt><dd>Wuhan · China</dd></dl>
-          </div>
-        </article>
-      </div>
-      <aside class="contact-fullscreen-info"><p>CONTACT</p><h2>${escapeHtml(settings.contact_title||"联系我")}</h2>
-      <span>${escapeHtml(settings.contact_intro||"如果你想聊聊新的合作，可以通过下面的方式找到我。")}</span>
-      ${settings.contact_location?`<small>${escapeHtml(settings.contact_location)}</small>`:""}
-      <div class="contact-methods">${methods.map(([label,value,href])=>href?`<a href="${escapeHtml(href)}" ${href.startsWith("http")?'target="_blank" rel="noreferrer"':""}><b>${label}</b><span>${escapeHtml(value)}</span><i>↗</i></a>`:`<button type="button" data-copy-contact="${escapeHtml(value)}"><b>${label}</b><span>${escapeHtml(value)}</span><i>复制</i></button>`).join("")}</div><div class="contact-copy-status"></div></aside></section>`;    overlay.onclick = async (e) => { if(e.target===overlay||e.target.closest(".contact-dialog-close")) overlay.remove(); const copy=e.target.closest("[data-copy-contact]"); if(copy){await navigator.clipboard.writeText(copy.dataset.copyContact);overlay.querySelector(".contact-copy-status").textContent="已复制到剪贴板";} };
-    document.body.appendChild(overlay);
-    const badge = overlay.querySelector(".contact-draggable-badge");
-    const cord = overlay.querySelector(".contact-cord");
-    let dragging=false, startX=0, startY=0, dx=0, dy=0;
-    const applyBadge=()=>{
-      badge.style.setProperty("--drag-x", `${dx}px`);
-      badge.style.setProperty("--drag-y", `${dy}px`);
-      badge.style.setProperty("--lanyard-ry", `${dx * .035}deg`);
-      badge.style.setProperty("--lanyard-rx", `${dy * -.02}deg`);
-      cord.style.setProperty("--cord-rotate", `${dx * .018}deg`);
-    };
-    badge?.addEventListener("pointerdown",(event)=>{dragging=true;badge.setPointerCapture(event.pointerId);startX=event.clientX-dx;startY=event.clientY-dy;badge.classList.add("is-dragging");});
-    badge?.addEventListener("pointermove",(event)=>{if(!dragging)return;dx=(event.clientX-startX)*.72;dy=Math.max(-70,Math.min(170,(event.clientY-startY)*.72));applyBadge();});
-    badge?.addEventListener("pointerup",()=>{dragging=false;dx=0;dy=0;badge.classList.remove("is-dragging");applyBadge();});
-    badge?.addEventListener("pointercancel",()=>{dragging=false;dx=0;dy=0;badge.classList.remove("is-dragging");applyBadge();});  };
+  // Contact interaction is owned by the React lanyard overlay.
   document.querySelector("#footer-email").textContent = `EMAIL · ${settings.contact_email || ""}`;
   document.querySelector("#footer-logo").textContent = settings.site_name || "山川止行";
   document.querySelector("#footer-text").textContent = settings.footer_text || "";
@@ -138,23 +92,13 @@ function setupHomeExploreChannels(){
   document.querySelectorAll("[data-explore-channel]").forEach((button)=>{
     button.addEventListener("click",(event)=>{
       event.preventDefault();
-      const slug=button.dataset.exploreChannel;
-      if(slug!=="photo"){ location.href="/inspiration.html"; return; }
-      openHomeExploreMode();
+      window.dispatchEvent(new CustomEvent("shanchuan:open-inspiration-cloud",{
+        detail:{category:button.dataset.exploreChannel || "photo"}
+      }));
     });
   });
 }
 
-async function openHomeExploreMode(){
-  const old=document.querySelector(".home-explore-overlay"); if(old) old.remove();
-  document.querySelector(".nav")?.classList.add("nav-hidden-explore");
-  const overlay=document.createElement("section");
-  overlay.className="home-explore-overlay";
-  const secondary=["Humanity","News","Landscape","Commercial","Portrait","Campus","Documentary","Travel"];
-  overlay.innerHTML=`<button class="home-explore-close" type="button">Exit</button><div class="home-explore-stars"></div><div class="home-explore-center"><i></i><b>Photography</b></div><svg class="home-explore-lines" viewBox="0 0 100 100" preserveAspectRatio="none">${secondary.map((_,i)=>{const a=(i/secondary.length)*Math.PI*2-Math.PI/2;const x=50+Math.cos(a)*31;const y=50+Math.sin(a)*23;return `<line x1="50" y1="50" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}"></line>`}).join("")}</svg>${secondary.map((name,i)=>{const a=(i/secondary.length)*Math.PI*2-Math.PI/2;const x=50+Math.cos(a)*31;const y=50+Math.sin(a)*23;return `<a class="home-explore-node" href="/inspiration.html" style="left:${x}%;top:${y}%;--d:${i*.08}s"><i></i><span>${name}</span></a>`}).join("")}`;
-  overlay.querySelector(".home-explore-close").addEventListener("click",()=>{overlay.remove();document.querySelector(".nav")?.classList.remove("nav-hidden-explore");});
-  document.body.appendChild(overlay);
-}
 function projectCard(project, index, main) {
   return `<a class="project-card ${main ? "project-main" : ""}" href="/project.html?id=${project.id}">
     <div class="card-media ${fallbackCovers[index % fallbackCovers.length]}">${mediaMarkup(project.cover_image, "image", project.title)}</div>

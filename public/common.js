@@ -42,7 +42,29 @@ function setupNavigation(hero) {
     links.classList.toggle("open",open);
     button.setAttribute("aria-expanded",String(open));
   });
-  links?.querySelectorAll("a").forEach((link) => link.addEventListener("click",closeMenu));
+  const sectionIds = new Set(["series", "inspiration", "about"]);
+  const alignSection = (section, behavior = "smooth") => {
+    const navHeight = nav?.getBoundingClientRect().height || 70;
+    const top = section.getBoundingClientRect().top + window.scrollY;
+    const height = section.getBoundingClientRect().height;
+    const viewport = Math.max(0, window.innerHeight - navHeight);
+    // Short editorial sections sit in the visual center; long archives keep their title visible.
+    const centerOffset = sectionIds.has(section.id) ? Math.max(28, (viewport - Math.min(height, viewport)) / 2) : 24;
+    window.scrollTo({ top: Math.max(0, top - navHeight - centerOffset), behavior });
+  };
+  links?.querySelectorAll("a[href^='#']").forEach((link) => link.addEventListener("click", (event) => {
+    const hash = link.getAttribute("href") || "";
+    const section = hash === "#top" ? document.documentElement : document.querySelector(hash);
+    if (!section) return closeMenu();
+    event.preventDefault();
+    closeMenu();
+    alignSection(section);
+    window.history.pushState(null, "", hash);
+  }));
+  if (location.hash) {
+    const initial = location.hash === "#top" ? document.documentElement : document.querySelector(location.hash);
+    if (initial) requestAnimationFrame(() => alignSection(initial, "auto"));
+  }
   document.addEventListener("keydown",(event)=>{if(event.key==="Escape")closeMenu();});
   document.addEventListener("click",(event)=>{
     if(!nav.contains(event.target))closeMenu();
@@ -129,18 +151,23 @@ const languageDictionary = {
   "作品集":"Works","登录":"Log in","输入四位密码":"Enter 4-digit password"
 };
 function setupLanguageToggle(){
-  const actions=document.querySelector(".nav-actions");
+  const actions=document.querySelector(".nav-actions")||document.querySelector(".works-nav")||document.querySelector(".admin-header");
   if(!actions||actions.querySelector(".language-toggle"))return;
   const button=document.createElement("button");
   button.className="language-toggle";
   button.type="button";
-  button.setAttribute("aria-label","Toggle language");
-  actions.insertBefore(button,actions.querySelector(".admin-login-trigger"));
+  button.setAttribute("aria-label","Switch site language");
+  button.innerHTML='<span class="language-label" aria-hidden="true">EN</span>';
+  const anchor=actions.querySelector(".admin-login-trigger")||actions.querySelector(".main-nav")||null;
+  if(anchor)actions.insertBefore(button,anchor);else actions.appendChild(button);
   const apply=()=>{
     const english=localStorage.getItem("site-language")==="en";
     document.documentElement.lang=english?"en":"zh-CN";
-    button.textContent=english?"CN":"EN";
-    document.querySelectorAll("body *:not(script):not(style):not(.language-toggle)").forEach((element)=>{
+    button.dataset.language=english?"en":"zh";
+    button.setAttribute("aria-pressed",String(english));
+    button.setAttribute("aria-label",english?"Switch site language to Chinese":"Switch site language to English");
+    button.querySelector(".language-label").textContent=english?"CN":"EN";
+    document.querySelectorAll("body *:not(script):not(style):not(.language-toggle):not(.language-toggle *)").forEach((element)=>{
       if(element.children.length)return;
       const value=element.textContent.trim();
       if(!value)return;
@@ -161,21 +188,22 @@ function setupLanguageToggle(){
 }
 
 function setupThemeToggle(){
-  const host=document.querySelector(".nav-actions")||document.querySelector(".works-nav")||document.querySelector(".main-nav");
+  const host=document.querySelector(".nav-actions")||document.querySelector(".works-nav")||document.querySelector(".admin-header")||document.querySelector(".main-nav");
   if(!host||host.querySelector(".theme-toggle"))return;
   const button=document.createElement("button");
   button.className="theme-toggle";
   button.type="button";
-  button.setAttribute("aria-label","Toggle theme");
+  button.setAttribute("aria-label","Switch color theme");
   const target=host.querySelector(".admin-login-trigger")||host.querySelector(".menu-button")||null;
   const getTheme=()=>localStorage.getItem("site-theme")||"light";
   const apply=()=>{
     const theme=getTheme();
     document.documentElement.dataset.theme=theme;
     button.dataset.theme=theme;
-    button.innerHTML=theme==="dark"?"<span>LIGHT</span>":"<span>DARK</span>";
+    button.innerHTML="<span aria-hidden=\"true\"></span>";
     button.setAttribute("aria-pressed",String(theme==="dark"));
     button.setAttribute("title",theme==="dark"?"Switch to light":"Switch to dark");
+    button.setAttribute("aria-label",theme==="dark"?"Switch to light":"Switch to dark");
   };
   button.addEventListener("click",()=>{
     localStorage.setItem("site-theme",getTheme()==="dark"?"light":"dark");
@@ -187,3 +215,18 @@ function setupThemeToggle(){
 setupAdminLogin();
 setupThemeToggle();
 setupLanguageToggle();
+
+
+/* Fallback: keep the theme switch available even when a legacy page mounts late. */
+(function ensureThemeControl(){
+  const install=()=>{
+    const host=document.querySelector('.nav-actions')||document.querySelector('.works-nav')||document.querySelector('.admin-header')||document.querySelector('.main-nav');
+    if(!host||host.querySelector('.theme-toggle')) return;
+    const button=document.createElement('button');
+    button.type='button'; button.className='theme-toggle'; button.setAttribute('aria-label','Switch color theme');
+    const apply=()=>{const theme=localStorage.getItem('site-theme')||'light';document.documentElement.dataset.theme=theme;button.dataset.theme=theme;button.innerHTML='<span aria-hidden="true"></span>';button.setAttribute('aria-pressed',String(theme==='dark'));};
+    button.addEventListener('click',()=>{const theme=(localStorage.getItem('site-theme')||'light')==='dark'?'light':'dark';localStorage.setItem('site-theme',theme);apply();});
+    const anchor=host.querySelector('.admin-login-trigger')||host.querySelector('.menu-button');if(anchor)host.insertBefore(button,anchor);else host.appendChild(button);apply();
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(install,0),{once:true}); else setTimeout(install,0);
+})();

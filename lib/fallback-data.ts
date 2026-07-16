@@ -15,6 +15,9 @@
   contact_title: "联系我",
   contact_intro: "如果你想聊聊摄影、设计、空间或新的合作，可以通过下面的方式找到我。",
   contact_location: "武汉 / 可远程合作",
+  contact_name: "RING",
+  contact_phone: "18569569185",
+  contact_role: "Visual Creator / Designer",
   footer_text: "视觉档案 / 武汉 / 2026",
   footer_copyright: "© 2026 SHANCHUAN STUDIO"
 };

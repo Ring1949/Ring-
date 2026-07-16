@@ -402,7 +402,6 @@ export async function handleArchiveGet(request: NextRequest, context: { params: 
   }
 }
 export async function handleArchivePost(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const supabase = getSupabaseServer();
   const { path } = await context.params;
   const route = path.join("/");
 
@@ -421,6 +420,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
 
   const denied = requireAdmin(request);
   if (denied) return denied;
+  const supabase = getSupabaseServer();
 
   if (route === "categories") {
     const form = await request.formData();
