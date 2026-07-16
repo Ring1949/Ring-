@@ -75,10 +75,10 @@ async function initHome() {
   document.querySelector(".recommend-window")?.classList.toggle("is-empty", !recommended.length);
   updateRecommend();
 
-  const inspirationChannels = [
-    ["摄影","PHOTOGRAPHY","photo"],["平面","GRAPHIC","graphic"],
-    ["空间","SPACE","space"],["AI","GENERATIVE","ai"],["其他","OTHER","other"]
-  ];
+  const inspirationConfig = await api("/api/inspiration-config").catch(() => null);
+  const inspirationChannels = inspirationConfig?.tree?.channels?.length
+    ? inspirationConfig.tree.channels.map((channel) => [channel.title, channel.english, channel.id])
+    : [["\u6444\u5f71","PHOTOGRAPHY","photo"],["\u5e73\u9762","GRAPHIC","graphic"],["\u7a7a\u95f4","SPACE","space"],["AI","GENERATIVE","ai"],["\u5176\u4ed6","OTHER","other"]];
   document.querySelector("#channel-list").innerHTML = inspirationChannels.map(([name,label,slug], index) => `
     <button class="channel" type="button" data-explore-channel="${slug}">
       <div class="channel-index">0${index+1}</div><div class="channel-icon">•</div>

@@ -1,3 +1,5 @@
+import { defaultInspirationTree } from "@/lib/inspiration";
+
 ﻿export const defaultSettings: Record<string, string> = {
   site_name: "山川止行",
   hero_title: "山川止行",

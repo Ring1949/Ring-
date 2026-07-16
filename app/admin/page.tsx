@@ -1,2 +1,3 @@
 ﻿import { LegacyPage } from "@/lib/LegacyPage";
-export default function Page(){return <LegacyPage html="admin.html" styles={["/admin.css?v=20260624-2"]} scripts={["/common.js?v=20260716-7","/admin.js?v=20260624-1"]}/>;}
+export default function Page(){return <LegacyPage html="admin.html" styles={["/admin.css?v=20260716-inspiration-1"]} scripts={["/common.js?v=20260716-7","/admin.js?v=20260716-inspiration-1"]}/>;}
+

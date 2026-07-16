@@ -4,60 +4,18 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 import * as THREE from "three";
 import type { Media } from "@/lib/types";
+import { defaultInspirationTree, type InspirationTree, type InspirationResourceMap } from "@/lib/inspiration";
 import HumanityArchive from "@/components/inspiration/HumanityArchive";
 import styles from "./InspirationCloudOverlay.module.css";
 
-type ChannelSlug = "photo" | "graphic" | "space" | "ai" | "other";
+type ChannelSlug = string;
 type ChannelMeta = { title: string; english: string; whisper?: string };
 type CloudControls = { targetX: number; targetY: number; targetZ: number; isDragging: boolean; lastX: number; lastY: number };
-type Chapter = { title: string; english: string; left: string; top: string; keywords: string[] };
-
-const CHANNELS: Record<ChannelSlug, ChannelMeta> = {
-  photo: { title: "\u6444\u5f71", english: "PHOTOGRAPHY", whisper: "\u4eba\u6587" },
-  graphic: { title: "\u5e73\u9762", english: "GRAPHIC" },
-  space: { title: "\u7a7a\u95f4", english: "SPACE" },
-  ai: { title: "AI", english: "GENERATIVE" },
-  other: { title: "\u5176\u4ed6", english: "OTHER" },
-};
-const CHANNEL_SLUGS = new Set<ChannelSlug>(["photo", "graphic", "space", "ai", "other"]);
-const CHAPTERS: Record<ChannelSlug, Chapter[]> = {
-  photo: [
-    { title: "\u4eba\u6587", english: "HUMANITY", left: "30%", top: "62%", keywords: ["humanity", "\u4eba\u6587", "\u4eba\u7269", "street", "people"] },
-    { title: "\u98ce\u5149", english: "LANDSCAPE", left: "68%", top: "30%", keywords: ["landscape", "\u98ce\u5149", "\u98ce\u666f", "\u81ea\u7136", "city"] },
-    { title: "\u65b0\u95fb", english: "NEWS", left: "76%", top: "57%", keywords: ["news", "\u65b0\u95fb", "\u7eaa\u5b9e", "event"] },
-    { title: "\u5199\u771f", english: "PORTRAIT", left: "55%", top: "78%", keywords: ["portrait", "\u5199\u771f", "\u8096\u50cf", "\u4eba\u50cf"] },
-    { title: "\u5fae\u8ddd", english: "MACRO", left: "22%", top: "35%", keywords: ["macro", "\u5fae\u8ddd", "closeup", "detail"] },
-  ],
-  graphic: [
-    { title: "\u5b57\u4f53", english: "TYPE", left: "30%", top: "62%", keywords: ["type", "typography", "\u5b57\u4f53", "\u6392\u5370"] },
-    { title: "\u54c1\u724c", english: "BRANDING", left: "68%", top: "30%", keywords: ["brand", "branding", "\u54c1\u724c", "identity"] },
-    { title: "\u7f16\u8f91", english: "EDITORIAL", left: "76%", top: "57%", keywords: ["editorial", "\u7f16\u8f91", "book", "booklet"] },
-    { title: "\u6d77\u62a5", english: "POSTER", left: "55%", top: "78%", keywords: ["poster", "\u6d77\u62a5", "campaign"] },
-    { title: "\u63d2\u753b", english: "ILLUSTRATION", left: "22%", top: "35%", keywords: ["illustration", "\u63d2\u753b", "drawing"] },
-  ],
-  space: [
-    { title: "3D\u5efa\u6a21", english: "3D MODEL", left: "30%", top: "62%", keywords: ["3d", "model", "\u5efa\u6a21", "render"] },
-    { title: "\u5ba4\u5185", english: "INTERIOR", left: "68%", top: "30%", keywords: ["interior", "\u5ba4\u5185", "room"] },
-    { title: "\u5efa\u7b51", english: "ARCHITECTURE", left: "76%", top: "57%", keywords: ["architecture", "\u5efa\u7b51", "building"] },
-    { title: "\u6750\u8d28", english: "MATERIAL", left: "55%", top: "78%", keywords: ["material", "\u6750\u8d28", "texture"] },
-    { title: "\u88c5\u7f6e", english: "INSTALLATION", left: "22%", top: "35%", keywords: ["installation", "\u88c5\u7f6e", "exhibition"] },
-  ],
-  ai: [
-    { title: "\u56fe\u50cf", english: "IMAGE", left: "30%", top: "62%", keywords: ["image", "\u56fe\u50cf", "visual"] },
-    { title: "\u6982\u5ff5", english: "CONCEPT", left: "68%", top: "30%", keywords: ["concept", "\u6982\u5ff5"] },
-    { title: "\u63d0\u793a\u8bcd", english: "PROMPT", left: "76%", top: "57%", keywords: ["prompt", "\u63d0\u793a\u8bcd"] },
-    { title: "\u5b9e\u9a8c", english: "EXPERIMENT", left: "55%", top: "78%", keywords: ["experiment", "\u5b9e\u9a8c", "test"] },
-    { title: "\u5de5\u4f5c\u6d41", english: "WORKFLOW", left: "22%", top: "35%", keywords: ["workflow", "\u5de5\u4f5c\u6d41", "process"] },
-  ],
-  other: [
-    { title: "\u624b\u7ed8", english: "HAND DRAWN", left: "30%", top: "62%", keywords: ["hand", "drawing", "\u624b\u7ed8", "sketch"] },
-    { title: "\u53a8\u827a", english: "COOKING", left: "68%", top: "30%", keywords: ["cooking", "food", "\u53a8\u827a"] },
-    { title: "\u624b\u5de5", english: "CRAFT", left: "76%", top: "57%", keywords: ["craft", "\u624b\u5de5", "making"] },
-    { title: "\u89c6\u9891", english: "VIDEO", left: "55%", top: "78%", keywords: ["video", "\u89c6\u9891", "film"] },
-    { title: "\u65e5\u5e38", english: "DAILY", left: "22%", top: "35%", keywords: ["daily", "\u65e5\u5e38", "life"] },
-  ],
-};
-const CHANNEL_MEDIA_SLUGS: Record<ChannelSlug, string[]> = { photo: ["photo", "photography"], graphic: ["graphic", "design"], space: ["space", "3d", "3D"], ai: ["ai"], other: ["other", "video", "daily"] };
+type Chapter = { id: string; title: string; english: string; left: string; top: string; keywords: string[] };
+const CHAPTER_POSITIONS = [["30%", "62%"], ["68%", "30%"], ["76%", "57%"], ["55%", "78%"], ["22%", "35%"], ["48%", "22%"], ["86%", "73%"]] as const;
+const CHANNEL_MEDIA_SLUGS: Record<string, string[]> = { photo: ["photo", "photography"], graphic: ["graphic", "design"], space: ["space", "3d", "three-d"], ai: ["ai"], other: ["other", "video", "daily"] };
+function channelMeta(tree: InspirationTree, slug: string): ChannelMeta { const item = tree.channels.find((channel) => channel.id === slug) || tree.channels[0] || defaultInspirationTree.channels[0]; return { title: item.title, english: item.english, whisper: slug === "photo" ? "\u4eba\u6587" : undefined }; }
+function chapterItems(tree: InspirationTree, slug: string): Chapter[] { const channel = tree.channels.find((item) => item.id === slug) || tree.channels[0] || defaultInspirationTree.channels[0]; return channel.chapters.map((item, index) => { const position = CHAPTER_POSITIONS[index % CHAPTER_POSITIONS.length]; return { ...item, keywords: item.keywords || [], left: position[0], top: position[1] }; }); }
 
 
 function randomNormal(random: () => number) { const u = Math.max(random(), 0.000001), v = Math.max(random(), 0.000001); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
@@ -103,16 +61,18 @@ function MediaVisual({ item, thumbnail = false }: { item: Media; thumbnail?: boo
 
 export default function InspirationCloudOverlay() {
   const [channel, setChannel] = useState<ChannelSlug>("photo"), [open, setOpen] = useState(false), [reducedMotion, setReducedMotion] = useState(false), [depth, setDepth] = useState<"root" | "sub" | "resources">("root"), [activeChapter, setActiveChapter] = useState("HUMANITY"), [items, setItems] = useState<Media[]>([]), [selectedResource, setSelectedResource] = useState<Media | null>(null);
-  const meta = CHANNELS[channel];
-  const channelChapters = CHAPTERS[channel];
+  const [tree, setTree] = useState<InspirationTree>(defaultInspirationTree);
+  const [assignments, setAssignments] = useState<InspirationResourceMap>({});
+  const meta = channelMeta(tree, channel);
+  const channelChapters = chapterItems(tree, channel);
   const activeMeta = channelChapters.find((item) => item.english === activeChapter) || channelChapters[0];
-  const channelItems = useMemo(() => items.filter((item) => CHANNEL_MEDIA_SLUGS[channel].includes(String(item.category_slug || "").toLowerCase())), [items, channel]);
-  const resources = useMemo(() => channelItems.filter((item) => chapterFor(item, channelChapters) === activeMeta.english), [channelItems, channelChapters, activeMeta.english]);
+  const channelItems = useMemo(() => items.filter((item) => assignments[String(item.id)]?.channel ? assignments[String(item.id)].channel === channel : (CHANNEL_MEDIA_SLUGS[channel] || []).includes(String(item.category_slug || "").toLowerCase())), [items, channel, assignments]);
+  const resources = useMemo(() => channelItems.map((item) => ({ ...item, ...assignments[String(item.id)], inspiration_channel: assignments[String(item.id)]?.channel, inspiration_chapter: assignments[String(item.id)]?.chapter })).filter((item) => (item.inspiration_chapter ? item.inspiration_chapter === activeMeta?.id : chapterFor(item, channelChapters) === activeMeta?.english)), [channelItems, channelChapters, activeMeta?.english, activeMeta?.id, assignments]);
   const close = () => { setOpen(false); setSelectedResource(null); document.querySelector(".nav")?.classList.remove("nav-hidden-explore"); document.body.classList.remove("inspiration-cloud-active"); };
   const enterResources = (chapter: Chapter) => { setActiveChapter(chapter.english); setDepth("resources"); };
   useEffect(() => { const media = window.matchMedia("(prefers-reduced-motion: reduce)"); const update = () => setReducedMotion(media.matches); update(); media.addEventListener("change", update); return () => media.removeEventListener("change", update); }, []);
-  useEffect(() => { if (!open) return; let live = true; const load = async () => { const curatedResponse = await fetch("/api/inspiration"); const curated = curatedResponse.ok ? await curatedResponse.json() : []; if (Array.isArray(curated) && curated.length) return curated; const mediaResponse = await fetch("/api/media"); const allMedia = mediaResponse.ok ? await mediaResponse.json() : []; return Array.isArray(allMedia) ? allMedia : []; }; load().then((data) => { if (live) setItems(data); }).catch(() => { if (live) setItems([]); }); return () => { live = false; }; }, [open, channel]);
-  useEffect(() => { const openCloud = (event: Event) => { const requested = (event as CustomEvent<{ category?: string }>).detail?.category; const next = requested && CHANNEL_SLUGS.has(requested as ChannelSlug) ? requested as ChannelSlug : "photo"; setChannel(next); setDepth("root"); setActiveChapter(CHAPTERS[next][0].english); setSelectedResource(null); setOpen(true); document.querySelector(".nav")?.classList.add("nav-hidden-explore"); document.body.classList.add("inspiration-cloud-active"); }; const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { if (selectedResource) setSelectedResource(null); else if (depth === "resources") setDepth("sub"); else if (depth === "sub") setDepth("root"); else close(); } }; window.addEventListener("shanchuan:open-inspiration-cloud", openCloud); window.addEventListener("keydown", onKeyDown); return () => { window.removeEventListener("shanchuan:open-inspiration-cloud", openCloud); window.removeEventListener("keydown", onKeyDown); document.body.classList.remove("inspiration-cloud-active"); }; }, [depth, selectedResource]);
+  useEffect(() => { if (!open) return; let live = true; const load = async () => { const [curatedResponse, configResponse] = await Promise.all([fetch("/api/inspiration"), fetch("/api/inspiration-config")]); const curated = curatedResponse.ok ? await curatedResponse.json() : []; const config = configResponse.ok ? await configResponse.json() : null; if (live && config?.tree) { setTree(config.tree); setAssignments(config.assignments || {}); } if (Array.isArray(curated) && curated.length) return curated; const mediaResponse = await fetch("/api/media"); const allMedia = mediaResponse.ok ? await mediaResponse.json() : []; return Array.isArray(allMedia) ? allMedia : []; }; load().then((data) => { if (live) setItems(data); }).catch(() => { if (live) setItems([]); }); return () => { live = false; }; }, [open, channel]);
+  useEffect(() => { const openCloud = (event: Event) => { const requested = (event as CustomEvent<{ category?: string }>).detail?.category; const next = requested && tree.channels.some((item) => item.id === requested) ? requested : (tree.channels[0]?.id || "photo"); const nextChapters = chapterItems(tree, next); setChannel(next); setDepth("root"); setActiveChapter(nextChapters[0]?.english || ""); setSelectedResource(null); setOpen(true); document.querySelector(".nav")?.classList.add("nav-hidden-explore"); document.body.classList.add("inspiration-cloud-active"); }; const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { if (selectedResource) setSelectedResource(null); else if (depth === "resources") setDepth("sub"); else if (depth === "sub") setDepth("root"); else close(); } }; window.addEventListener("shanchuan:open-inspiration-cloud", openCloud); window.addEventListener("keydown", onKeyDown); return () => { window.removeEventListener("shanchuan:open-inspiration-cloud", openCloud); window.removeEventListener("keydown", onKeyDown); document.body.classList.remove("inspiration-cloud-active"); }; }, [depth, selectedResource, tree]);
   if (!open) return null;
   const showChapters = depth === "sub";
   const showResources = depth === "resources";
@@ -120,6 +80,7 @@ export default function InspirationCloudOverlay() {
   const archiveImages = archiveMode ? resources.filter((item) => itemKind(item) === "image" && Boolean(item.file_path)) : [];
   const labelTitle = meta.title;
   const labelEnglish = meta.english;
+  if (!activeMeta) return null;
   return <section className={styles.overlay} aria-label={labelTitle + " inspiration space"}>
     <CloudCanvas reducedMotion={reducedMotion} deep={showResources} archiveActive={archiveMode} archiveItems={archiveImages} onArchiveSelect={setSelectedResource} onZoomIn={() => setDepth((value) => value === "root" ? "sub" : value)} onZoomOut={() => { if (depth === "resources") setDepth("root"); }} />
     <div className={styles.vignette} aria-hidden="true" />
@@ -133,5 +94,5 @@ export default function InspirationCloudOverlay() {
   </section>;
 }
 function ResourcePanel({ item, category, onClose }: { item: Media; category: string; onClose: () => void }) {
-  return <section className={styles.resourcePanel} role="dialog" aria-modal="true" aria-label={item.title || "Resource preview"}><button type="button" className={styles.resourceClose} onClick={onClose} aria-label="Close preview">&#215;</button><div className={styles.resourcePreview}><MediaVisual item={item} /></div><aside className={styles.resourceInfo}><p>{category + " MATERIAL"}</p><h2>{item.title || "UNTITLED"}</h2><dl><dt>CAMERA</dt><dd>{item.camera || "\u2014"}</dd><dt>LENS</dt><dd>{item.lens || "\u2014"}</dd><dt>DATE</dt><dd>{item.captured_at || item.created_at || "\u2014"}</dd><dt>TAGS</dt><dd>{item.tags || "\u2014"}</dd></dl>{item.description ? <span>{item.description}</span> : null}<div className={styles.resourceActions}><a href={item.file_path} target="_blank" rel="noreferrer">OPEN LINK</a><a href={item.file_path} download={item.original_name || true}>DOWNLOAD ORIGINAL</a></div></aside></section>;
+  return <section className={styles.resourcePanel} role="dialog" aria-modal="true" aria-label={item.title || "Resource preview"}><button type="button" className={styles.resourceClose} onClick={onClose} aria-label="Close preview">&#215;</button><div className={styles.resourcePreview}><MediaVisual item={item} /></div><aside className={styles.resourceInfo}><p>{category + " MATERIAL"}</p><h2>{item.title || "UNTITLED"}</h2><dl><dt>CAMERA</dt><dd>{item.camera || "\u2014"}</dd><dt>LENS</dt><dd>{item.lens || "\u2014"}</dd><dt>DATE</dt><dd>{item.captured_at || item.created_at || "\u2014"}</dd><dt>TAGS</dt><dd>{item.tags || "\u2014"}</dd></dl>{item.description ? <span>{item.description}</span> : null}<div className={styles.resourceActions}><a href={item.source_url || item.file_path} target="_blank" rel="noreferrer">OPEN LINK</a><a href={item.file_path} download={item.original_name || true}>DOWNLOAD ORIGINAL</a></div></aside></section>;
 }

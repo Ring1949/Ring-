@@ -1,4 +1,4 @@
-import Script from "next/script";
+﻿import Script from "next/script";
 import { readLegacyBody } from "@/lib/legacy-html";
 
 export default function WorksPage() {
@@ -12,7 +12,8 @@ export default function WorksPage() {
       <link rel="stylesheet" href="/works-enhancements.css?v=20260624-2" />
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       <Script src="/common.js?v=20260716-7" strategy="afterInteractive" />
-      <Script src="/works.js?v=20260623-2" strategy="afterInteractive" />
+      <Script src="/works.js?v=20260716-subcategories-1" strategy="afterInteractive" />
     </>
   );
 }
+

@@ -1,5 +1,5 @@
 const state = { settings:{}, categories:[], projects:[], media:[], tags:[] };
-const viewNames = { settings:"首页设置",media:"上传作品",projects:"系列管理",categories:"作品管理",contact:"联系方式" };
+const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4e0a\u4f20\u4f5c\u54c1",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u4f5c\u54c1\u7ba1\u7406",inspiration:"\u7075\u611f\u9891\u9053",contact:"\u8054\u7cfb\u65b9\u5f0f" };
 
 async function request(url, options = {}) {
   const response = await fetch(url, options);
@@ -104,7 +104,7 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
     notify(error.message,true);
   }
 });
-document.querySelector("#contact-form").addEventListener("submit", async (event) => {
+if(false) document.querySelector("#contact-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     state.settings = await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(formDataObject(event.target))});
@@ -204,3 +204,18 @@ async function saveProject(event) {
   event.preventDefault();const data=new FormData(event.target),id=data.get("id"),tagIds=data.getAll("tag_ids");data.delete("id");data.delete("tag_ids");data.set("tag_ids",JSON.stringify(tagIds));
   await request(id?`/api/projects/${id}`:"/api/projects",{method:id?"PUT":"POST",body:data});closeModal();await loadAll();notify("系列已保存");
 }
+
+document.querySelector("#contact-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = document.querySelector("#contact-save-status");
+  try {
+    if (status) { status.textContent = "\u6b63\u5728\u4fdd\u5b58\u8054\u7cfb\u4fe1\u606f\u2026"; status.className = "media-upload-status wide working"; }
+    state.settings = await request("/api/settings", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(formDataObject(event.target)) });
+    renderSettings();
+    if (status) { status.textContent = "\u8054\u7cfb\u4fe1\u606f\u5df2\u4fdd\u5b58\u5e76\u4f1a\u540c\u6b65\u5230\u7f51\u7ad9\u3002"; status.className = "media-upload-status wide success"; }
+    notify("\u8054\u7cfb\u65b9\u5f0f\u5df2\u4fdd\u5b58");
+  } catch (error) {
+    if (status) { status.textContent = "\u4fdd\u5b58\u5931\u8d25\uff1a" + error.message; status.className = "media-upload-status wide error"; }
+    notify(error.message, true);
+  }
+});

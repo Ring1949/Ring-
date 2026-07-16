@@ -3,6 +3,7 @@ import { getSettings, now, replaceTagLinks, setSettings, slugify } from "@/lib/d
 import { getSupabaseServer, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
 import { bool, formValue, isAdmin, json, parseTagIds, requireAdmin } from "@/lib/utils";
 import { defaultCategories, isSupabaseConfigError } from "@/lib/fallback-data";
+import { parseInspirationResourceMap, parseInspirationTree } from "@/lib/inspiration";
 
 const toBool = (value: unknown) => bool(value) === 1;
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
@@ -170,6 +171,7 @@ function mediaPayloadFromSaved(saved: any, values: any, index = 0) {
     is_selected: toBool(values.is_selected),
     is_cover: mediaType === "image" ? toBool(values.is_cover) : false,
     show_in_database: toBool(values.show_in_database),
+    show_in_inspiration: toBool(values.show_in_inspiration),
     sort_order: (Number(values.sort_order) || 0) + index,
     created_at: now(),
     updated_at: now()
@@ -245,8 +247,15 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
   // Session validation is independent of Supabase and must stay available when the data service is unavailable.
   if (route === "me") return json({ authenticated: isAdmin(request) });
 
-  const supabase = getSupabaseServer();
   if (route === "settings") return json(await getSettings());
+  if (route === "inspiration-config") {
+    const settings = await getSettings();
+    return json({
+      tree: parseInspirationTree(settings.inspiration_tree_json),
+      assignments: parseInspirationResourceMap(settings.inspiration_resource_map_json)
+    });
+  }
+  const supabase = getSupabaseServer();
 
   if (route === "categories") {
     const includeAll = search.get("all") === "true" && isAdmin(request);
@@ -396,6 +405,7 @@ export async function handleArchiveGet(request: NextRequest, context: { params: 
       if (route === "settings") return json(await getSettings());
       if (route === "categories") return json(defaultCategories);
       if (["projects", "media", "tags", "series", "inspiration"].includes(route)) return json([]);
+      if (route === "inspiration-config") return json({ tree: parseInspirationTree(""), assignments: {} });
       if (path[0] === "projects") return json({ error: "Resource not found" }, 404);
       if (path[0] === "media") return json({ error: "Resource not found" }, 404);
     }
@@ -533,6 +543,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
         is_selected: toBool(form.get("is_selected")),
         is_cover: mediaType === "image" ? toBool(form.get("is_cover")) : false,
         show_in_database: toBool(form.get("show_in_database")),
+        show_in_inspiration: toBool(form.get("show_in_inspiration")),
         sort_order: (Number(formValue(form,"sort_order")) || 0) + index,
         created_at: now(),
         updated_at: now()
@@ -550,15 +561,25 @@ export async function handleArchivePost(request: NextRequest, context: { params:
 }
 
 export async function handleArchivePut(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const supabase = getSupabaseServer();
   const { path } = await context.params;
   const denied = requireAdmin(request);
   if (denied) return denied;
+
+  if (path[0] === "inspiration-config") {
+    const body: any = await request.json().catch(() => ({}));
+    const values: Record<string, string> = {};
+    if (body.tree !== undefined) values.inspiration_tree_json = JSON.stringify(parseInspirationTree(body.tree));
+    if (body.assignments !== undefined) values.inspiration_resource_map_json = JSON.stringify(parseInspirationResourceMap(body.assignments));
+    const settings = await setSettings(values);
+    return json({ tree: parseInspirationTree(settings.inspiration_tree_json), assignments: parseInspirationResourceMap(settings.inspiration_resource_map_json) });
+  }
 
   if (path[0] === "settings") {
     const body = await request.json().catch(() => ({}));
     return json(await setSettings(body || {}));
   }
+
+  const supabase = getSupabaseServer();
 
   if (path[0] === "categories" && path[1]) {
     const existing = await supabase.from("categories").select("*").eq("id", Number(path[1])).maybeSingle();
@@ -631,6 +652,7 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
       is_selected: toBool(body.is_selected),
       is_cover: toBool(body.is_cover),
       show_in_database: toBool(body.show_in_database),
+      show_in_inspiration: body.show_in_inspiration === undefined ? existing.data.show_in_inspiration : toBool(body.show_in_inspiration),
       sort_order: Number(body.sort_order ?? existing.data.sort_order),
       updated_at: now()
     };

@@ -73,6 +73,9 @@ export type Media = {
   category_name?: string;
   category_slug?: string;
   tag_ids?: string;
+  inspiration_channel?: string;
+  inspiration_chapter?: string;
+  source_url?: string;
 };
 
 export type Tag = {
