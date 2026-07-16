@@ -116,25 +116,29 @@ function setupAdminLogin() {
       overlay.addEventListener("click", (event) => {
         if (event.target === overlay || event.target.closest(".admin-login-close")) close();
       });
-      overlay.querySelector(".admin-login-form").addEventListener("submit", async (event) => {
+      const loginForm = overlay.querySelector(".admin-login-form");
+      loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const button = event.submitter;
+        const button = loginForm.querySelector('button[type="submit"]');
         const message = overlay.querySelector(".admin-login-message");
+        const password = String(new FormData(loginForm).get("password") || "");
+        if (!password) { message.textContent = "\u8bf7\u8f93\u5165\u5bc6\u7801"; return; }
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 12000);
         button.disabled = true;
-        message.textContent = "正在验证…";
+        message.textContent = "\u6b63\u5728\u9a8c\u8bc1\u2026";
         try {
-          const password = new FormData(event.currentTarget).get("password");
-          const result = await api("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ password })
-          });
-          if (!result.success && !result.authenticated) throw new Error("登录状态异常");
-          location.href = "/admin";
+          const response = await fetch("/api/login", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }), signal: controller.signal });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || (!result.success && !result.authenticated)) throw new Error(result.error || "\u5bc6\u7801\u9519\u8bef");
+          message.textContent = "\u9a8c\u8bc1\u6210\u529f\uff0c\u6b63\u5728\u8fdb\u5165\u540e\u53f0\u2026";
+          window.setTimeout(() => window.location.assign("/admin"), 80);
         } catch (error) {
-          console.error("后台登录失败：", error);
-          message.textContent = error.message || "密码错误";
+          const timedOut = error && error.name === "AbortError";
+          message.textContent = timedOut ? "\u9a8c\u8bc1\u8d85\u65f6\uff0c\u8bf7\u91cd\u8bd5" : (error.message || "\u5bc6\u7801\u9519\u8bef");
           button.disabled = false;
+        } finally {
+          window.clearTimeout(timeout);
         }
       });
       document.body.appendChild(overlay);

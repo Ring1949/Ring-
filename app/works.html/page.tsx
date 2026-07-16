@@ -11,7 +11,7 @@ export default function WorksPage() {
       <link rel="stylesheet" href="/works.css?v=20260624-2" />
       <link rel="stylesheet" href="/works-enhancements.css?v=20260624-2" />
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-      <Script src="/common.js?v=20260716-2" strategy="afterInteractive" />
+      <Script src="/common.js?v=20260716-7" strategy="afterInteractive" />
       <Script src="/works.js?v=20260623-2" strategy="afterInteractive" />
     </>
   );

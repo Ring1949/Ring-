@@ -238,12 +238,14 @@ async function syncHero(media: any) {
 }
 
 async function handleArchiveGetCore(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const supabase = getSupabaseServer();
   const { path } = await context.params;
   const route = path.join("/");
   const search = request.nextUrl.searchParams;
 
+  // Session validation is independent of Supabase and must stay available when the data service is unavailable.
   if (route === "me") return json({ authenticated: isAdmin(request) });
+
+  const supabase = getSupabaseServer();
   if (route === "settings") return json(await getSettings());
 
   if (route === "categories") {

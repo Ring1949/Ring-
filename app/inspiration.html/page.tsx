@@ -10,7 +10,7 @@ export default function Page() {
       <link rel="stylesheet" href="/styles.css?v=20260704-2" />
       
       <InspirationGalaxy />
-      <Script src="/common.js?v=20260716-2" strategy="afterInteractive" />
+      <Script src="/common.js?v=20260716-7" strategy="afterInteractive" />
     </>
   );
 }
