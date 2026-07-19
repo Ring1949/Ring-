@@ -3,7 +3,7 @@ const projectId = new URLSearchParams(location.search).get("id");
 async function initProject() {
   if (!projectId) throw new Error("缺少项目 ID");
   const project = await api(`/api/projects/${projectId}`);
-  document.title = `${project.title} — 山川止行`;
+  document.title = `${project.title} — 山川行止`;
   document.body.classList.toggle("series-detail-page",Boolean(project.is_series));
   if (project.series_style) document.body.classList.add(`series-style-${project.series_style}`);
   const cover = project.cover_image || project.media.find((item) => item.is_cover)?.file_path;

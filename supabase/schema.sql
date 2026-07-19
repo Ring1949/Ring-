@@ -1,4 +1,4 @@
-﻿-- Safe Supabase schema for Shanchuan Visual Archive.
+-- Safe Supabase schema for Shanchuan Visual Archive.
 -- Run in Supabase SQL Editor.
 -- This creates tables, indexes, default data, and the public media bucket.
 -- It intentionally does NOT grant anonymous write access.
@@ -102,8 +102,8 @@ create index if not exists idx_media_inspiration on public.media(show_in_inspira
 create index if not exists idx_media_hero on public.media(is_hero, updated_at desc, sort_order, id desc);
 
 insert into public.settings (key, value, updated_at) values
-  ('site_name','山川止行',now()),
-  ('hero_title','山川止行',now()),
+  ('site_name','山川行止',now()),
+  ('hero_title','山川行止',now()),
   ('hero_subtitle','摄影 / 平面设计 / 空间 / 日常研究',now()),
   ('hero_media','/assets/hero-default.jpg',now()),
   ('hero_media_type','image',now()),

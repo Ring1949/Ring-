@@ -1,8 +1,8 @@
 import { defaultInspirationTree } from "@/lib/inspiration";
 
 ﻿export const defaultSettings: Record<string, string> = {
-  site_name: "山川止行",
-  hero_title: "山川止行",
+  site_name: "山川行止",
+  hero_title: "山川行止",
   hero_subtitle: "摄影 / 平面设计 / 空间 / 日常研究",
   hero_kicker: "SHANCHUAN VISUAL ARCHIVE · 2026",
   hero_media: "/assets/hero-default.jpg",
@@ -10,7 +10,7 @@ import { defaultInspirationTree } from "@/lib/inspiration";
   intro_text: "独立设计师与影像创作者\nBASED IN WUHAN",
   about_kicker: "ABOUT SHANCHUAN",
   about_title: "作品不是终点，\n而是我理解世界的索引。",
-  about_text: "作品不是终点，而是我理解世界的索引。你好，我是山川止行，一名横跨视觉、空间与影像的独立创作者。",
+  about_text: "作品不是终点，而是我理解世界的索引。你好，我是山川行止，一名横跨视觉、空间与影像的独立创作者。",
   contact_email: "hello@example.com",
   contact_link: "mailto:hello@example.com",
   contact_button_text: "一起做点什么 ↗",

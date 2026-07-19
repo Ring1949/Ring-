@@ -12,7 +12,7 @@ async function initHome() {
     image.onerror = () => { image.onerror = null; image.src = "/assets/archive-collage.png"; };
     image.src = category?.cover_image || "/assets/archive-collage.png";
   });
-  document.title = `${settings.site_name || "山川止行"} — 个人视觉档案`;
+  document.title = `${settings.site_name || "山川行止"} — 个人视觉档案`;
   document.querySelector("#hero-title").textContent = settings.hero_title || settings.site_name;
   document.querySelector("#hero-subtitle").textContent = settings.hero_subtitle || "";
   document.querySelector("#hero-kicker").textContent = settings.hero_kicker || "";
@@ -24,7 +24,7 @@ async function initHome() {
   document.querySelector("#contact-link").href = "#contact";
   // Contact interaction is owned by the React lanyard overlay.
   document.querySelector("#footer-email").textContent = `EMAIL · ${settings.contact_email || ""}`;
-  document.querySelector("#footer-logo").textContent = settings.site_name || "山川止行";
+  document.querySelector("#footer-logo").textContent = settings.site_name || "山川行止";
   document.querySelector("#footer-text").textContent = settings.footer_text || "";
   document.querySelector("#footer-copyright").textContent = settings.footer_copyright || "";
   const socialLinks = [

@@ -90,7 +90,7 @@ async function initCategory() {
     ...albumState.items.flatMap((item)=>splitTags(item.tags))
   ])];
 
-  document.title = `${albumState.category.name} — 山川止行`;
+  document.title = `${albumState.category.name} — 山川行止`;
   document.querySelector("#category-page").innerHTML = `
     <header class="album-heading">
       <div><h1>${escapeHtml(albumState.category.name)}集</h1><p>${escapeHtml(albumEnglishNames[albumState.category.slug] || "Creative works")}</p></div>

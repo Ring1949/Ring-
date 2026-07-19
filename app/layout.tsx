@@ -1,9 +1,9 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "山川止行 — 个人视觉档案",
-  description: "山川止行个人视觉档案"
+  title: "山川行止 — 个人视觉档案",
+  description: "山川行止个人视觉档案"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
