@@ -53,21 +53,25 @@ function mediaFormPayload(form, tagIds){
   payload.tag_ids=JSON.stringify(tagIds);
   return payload;
 }
+const MAX_PARALLEL_UPLOADS = 3;
 async function uploadFileDirectToSupabase(file){
   const signed=await request("/api/media/upload-sign",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,contentType:file.type,size:file.size})});
-  const body=new FormData();
-  body.append("cacheControl","3600");
-  body.append("",file);
-  const response=await fetch(signed.signed_url,{method:"PUT",headers:signed.upload_headers||{},body});
-  if(!response.ok){const detail=await response.text().catch(()=>"");throw new Error(`Supabase video upload failed: ${response.status} ${detail}`);}
+  let response;try{response=await fetch(signed.signed_url,{method:"PUT",headers:signed.upload_headers||{},body:file});}catch{throw new Error("素材上传失败：无法连接到 Supabase Storage，请检查网络后重试。");}
+  if(!response.ok){const detail=await response.text().catch(()=>"");throw new Error(`Storage upload failed (${response.status}): ${detail || "please check the file and try again"}`);}
   return signed;
 }
-async function uploadMediaDirect(form, files, tagIds){
-  const uploaded=[];
-  for(let index=0;index<files.length;index+=1){
-    mediaStatus.textContent=`正在直传 ${index+1}/${files.length}：${files[index].name}`;
-    uploaded.push(await uploadFileDirectToSupabase(files[index]));
-  }
+async function uploadMediaDirect(form, files, tagIds, statusTarget=mediaStatus){
+  const uploaded=new Array(files.length);
+  let nextIndex=0;
+  const worker=async()=>{
+    while(nextIndex<files.length){
+      const index=nextIndex++;
+      if(statusTarget)statusTarget.textContent=`正在上传 ${index+1}/${files.length}：${files[index].name}`;
+      uploaded[index]=await uploadFileDirectToSupabase(files[index]);
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(MAX_PARALLEL_UPLOADS,files.length)},worker));
+  if(statusTarget)statusTarget.textContent="正在批量保存素材信息…";
   const payload=mediaFormPayload(form,tagIds);
   payload.files=uploaded;
   return request("/api/media/direct-record",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -97,7 +101,7 @@ document.querySelector("#media-upload-form").addEventListener("submit",async(eve
     data.delete("tag_ids");
     data.set("tag_ids", JSON.stringify(tagIds));
     const created=shouldUseDirectUpload(files)
-      ? await uploadMediaDirect(event.target,files,tagIds)
+      ? await uploadMediaDirect(event.target,files,tagIds,mediaStatus)
       : await request("/api/media/upload",{method:"POST",body:data});
     event.target.reset();document.querySelector("#upload-preview").innerHTML="";
     renderSelectedFiles([]);
@@ -197,92 +201,25 @@ document.addEventListener("click",async(event)=>{
   if(event.target.closest("[data-batch-delete]")){const ids=[...mediaBatchState.selected];if(!ids.length||!confirm(`确定删除选中的 ${ids.length} 项素材吗？此操作无法撤销。`))return;const button=event.target.closest("[data-batch-delete]");button.disabled=true;button.textContent="正在删除…";const results=await Promise.allSettled(ids.map(id=>request(`/api/media/${id}`,{method:"DELETE"})));const failed=results.filter(r=>r.status==="rejected").length;mediaBatchState.active=false;mediaBatchState.selected.clear();await loadAll();notify(failed?`${ids.length-failed} 项已删除，${failed} 项失败`:`已删除 ${ids.length} 项素材`,failed>0);}
 });
 
-/* Inspiration archive management: tree and resource assignments persist in Supabase. */
+/* Separate inspiration asset manager. Inspiration assets never reuse the works library. */
 const inspirationState={tree:null,assignments:{}};
 const inspirationRoot=document.querySelector('#inspiration-admin');
 const iEsc=(value)=>escapeHtml(String(value||''));
-const iSlug=(value,fallback)=>String(value||'').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'')||fallback;
 function iChannelOptions(selected=''){return (inspirationState.tree?.channels||[]).map(channel=>'<option value="'+iEsc(channel.id)+'" '+(channel.id===selected?'selected':'')+'>'+iEsc(channel.title)+' / '+iEsc(channel.english)+'</option>').join('');}
 function iChapterOptions(channelId,selected=''){const channel=(inspirationState.tree?.channels||[]).find(item=>item.id===channelId)||(inspirationState.tree?.channels||[])[0];return (channel?.chapters||[]).map(chapter=>'<option value="'+iEsc(chapter.id)+'" '+(chapter.id===selected?'selected':'')+'>'+iEsc(chapter.title)+' / '+iEsc(chapter.english)+'</option>').join('');}
+function inspirationItems(){return state.media.filter(item=>Number(item.show_in_inspiration)===1);}
 function renderInspirationAdmin(){
   if(!inspirationRoot||!inspirationState.tree)return;
-  const channels=inspirationState.tree.channels||[];
-  const treeCards=channels.map((channel,channelIndex)=>'<article class="inspiration-channel-editor"><header><span>CHANNEL '+String(channelIndex+1).padStart(2,'0')+'</span><button type="button" data-i-remove-channel="'+channelIndex+'">\u5220\u9664\u9891\u9053</button></header><div class="inspiration-node-fields"><label>\u4e2d\u6587\u540d\u79f0<input data-i-field="channel-title" data-i-channel="'+channelIndex+'" value="'+iEsc(channel.title)+'"></label><label>ENGLISH<input data-i-field="channel-english" data-i-channel="'+channelIndex+'" value="'+iEsc(channel.english)+'"></label><label>SLUG<input data-i-field="channel-id" data-i-channel="'+channelIndex+'" value="'+iEsc(channel.id)+'"></label></div><div class="inspiration-chapter-list">'+(channel.chapters||[]).map((chapter,chapterIndex)=>'<div class="inspiration-chapter-editor"><header><span>LEVEL 02 / '+String(chapterIndex+1).padStart(2,'0')+'</span><button type="button" data-i-remove-chapter="'+channelIndex+':'+chapterIndex+'">\u5220\u9664</button></header><label>\u4e2d\u6587\u540d\u79f0<input data-i-field="chapter-title" data-i-channel="'+channelIndex+'" data-i-chapter="'+chapterIndex+'" value="'+iEsc(chapter.title)+'"></label><label>ENGLISH<input data-i-field="chapter-english" data-i-channel="'+channelIndex+'" data-i-chapter="'+chapterIndex+'" value="'+iEsc(chapter.english)+'"></label><label>\u5339\u914d\u5173\u952e\u8bcd<input data-i-field="chapter-keywords" data-i-channel="'+channelIndex+'" data-i-chapter="'+chapterIndex+'" value="'+iEsc((chapter.keywords||[]).join(', '))+'" placeholder="humanity, \u4eba\u6587"></label></div>').join('')+'<button type="button" class="inspiration-add-chapter" data-i-add-chapter="'+channelIndex+'">+ \u65b0\u589e\u4e8c\u7ea7\u8282\u70b9</button></div></article>').join('');
-  const assignments=Object.entries(inspirationState.assignments||{}).map(([id,assignment])=>({id,item:state.media.find(media=>String(media.id)===String(id)),assignment}));
-  inspirationRoot.innerHTML='<section class="inspiration-tree-panel"><div class="inspiration-toolbar"><div><p>LEVEL 01 + LEVEL 02</p><h3>\u7075\u611f\u9891\u9053\u7ed3\u6784</h3><span>\u7ba1\u7406\u4e00\u7ea7\u9891\u9053\u4e0e\u4e8c\u7ea7\u8282\u70b9\uff0c\u4fdd\u5b58\u540e\u4f1a\u540c\u6b65\u5230\u524d\u53f0\u3002</span></div><button type="button" class="primary" data-i-add-channel>+ \u65b0\u589e\u4e00\u7ea7\u9891\u9053</button></div><div class="inspiration-tree">'+treeCards+'</div><button type="button" class="primary" data-i-save-tree>\u4fdd\u5b58\u9891\u9053\u7ed3\u6784</button><span class="inspiration-save-status"></span></section><section class="inspiration-resources"><div class="inspiration-toolbar"><div><p>LEVEL 03 RESOURCES</p><h3>\u4e09\u7ea7\u7d20\u6750\u5e93</h3><span>\u56fe\u7247\u3001\u89c6\u9891\u3001\u94fe\u63a5\u4e0e\u7d20\u6750\u4fe1\u606f\u90fd\u5f52\u5c5e\u4e8e\u5bf9\u5e94\u7684\u4e09\u7ea7\u8282\u70b9\u3002</span></div></div><form id="inspiration-attach-form" class="inspiration-resource-form"><label>\u5df2\u4e0a\u4f20\u7d20\u6750<select name="media_id">'+state.media.map(item=>'<option value="'+item.id+'">'+iEsc(item.title||item.original_name||('#'+item.id))+'</option>').join('')+'</select></label><label>\u4e00\u7ea7\u9891\u9053<select name="channel">'+iChannelOptions(channels[0]?.id)+'</select></label><label>\u4e8c\u7ea7\u8282\u70b9<select name="chapter">'+iChapterOptions(channels[0]?.id)+'</select></label><label>\u81ea\u5b9a\u4e49\u6807\u9898<input name="title"></label><label>\u6807\u7b7e<input name="tags"></label><label class="wide">\u4ecb\u7ecd<input name="description"></label><label class="wide">\u5916\u90e8\u94fe\u63a5<input name="source_url" type="url" placeholder="https://..."></label><button class="primary" type="submit">\u5173\u8054\u5230\u4e09\u7ea7\u8282\u70b9</button></form><form id="inspiration-upload-form" class="inspiration-upload-form"><div><p>NEW RESOURCE</p><h4>\u4e0a\u4f20\u65b0\u7d20\u6750</h4><span>\u4f1a\u76f4\u63a5\u4fdd\u5b58\u5230 Supabase Storage \u5e76\u5f52\u6863\u3002</span></div><label class="file"><input name="files" type="file" accept="image/*,video/*,.pdf" required multiple><b>\u9009\u62e9\u56fe\u7247 / \u89c6\u9891 / \u6587\u4ef6</b></label><label><span>\u4e00\u7ea7\u9891\u9053</span><select name="channel">'+iChannelOptions(channels[0]?.id)+'</select></label><label><span>\u4e8c\u7ea7\u8282\u70b9</span><select name="chapter">'+iChapterOptions(channels[0]?.id)+'</select></label><label><span>\u6807\u9898</span><input name="title"></label><label><span>\u4ecb\u7ecd</span><input name="description"></label><label><span>\u5916\u90e8\u94fe\u63a5</span><input name="source_url" type="url"></label><input name="category_id" type="hidden"><input name="show_in_inspiration" type="hidden" value="true"><input name="show_in_database" type="hidden" value="false"><button class="primary" type="submit">\u4e0a\u4f20\u5e76\u5f52\u6863</button><span class="inspiration-upload-status"></span></form><div class="inspiration-assignment-list">'+(assignments.length?assignments.map(({id,item,assignment})=>'<article><div class="inspiration-assignment-thumb">'+(item?.media_type==='video'?'VIDEO':item?.file_path?'<img src="'+iEsc(item.file_path)+'">':'FILE')+'</div><div><b>'+iEsc(assignment.title||item?.title||('#'+id))+'</b><p>'+iEsc((channels.find(channel=>channel.id===assignment.channel)?.title||assignment.channel)+' / '+((channels.find(channel=>channel.id===assignment.channel)?.chapters||[]).find(chapter=>chapter.id===assignment.chapter)?.title||assignment.chapter))+'</p><span>'+iEsc(assignment.description||'')+'</span></div><button type="button" data-i-remove-resource="'+id+'">\u79fb\u51fa</button></article>').join(''):'<p class="inspiration-empty">\u6682\u65e0\u5df2\u5f52\u6863\u7d20\u6750\u3002</p>')+'</div></section>';
+  const channels=inspirationState.tree.channels||[], firstChannel=channels[0]?.id||'';
+  const assets=inspirationItems();
+  inspirationRoot.innerHTML='<section class="inspiration-resources"><div class="inspiration-toolbar"><div><p>INSPIRATION ASSETS</p><h3>\u7075\u611f\u7d20\u6750</h3><span>\u8fd9\u91cc\u7684\u5185\u5bb9\u4e0e\u4f5c\u54c1\u5e93\u5206\u5f00\u7ba1\u7406\uff0c\u4e0d\u4f1a\u81ea\u52a8\u540c\u6b65\u5230\u4f5c\u54c1\u96c6\u3002</span></div></div><form id="inspiration-upload-form" class="inspiration-upload-form"><div><p>NEW INSPIRATION</p><h4>\u6dfb\u52a0\u7d20\u6750</h4><span>\u4e0a\u4f20\u540e\u4f1a\u51fa\u73b0\u5728\u6240\u9009\u7684\u4e09\u7ea7\u8282\u70b9\u4e2d\u3002</span></div><label class="file"><input name="files" type="file" accept="image/*,video/*,.pdf" required multiple><b>\u9009\u62e9\u56fe\u7247 / \u89c6\u9891 / \u6587\u4ef6</b></label><label><span>\u4e00\u7ea7\u9891\u9053</span><select name="channel">'+iChannelOptions(firstChannel)+'</select></label><label><span>\u4e8c\u7ea7\u8282\u70b9</span><select name="chapter">'+iChapterOptions(firstChannel)+'</select></label><label><span>\u6807\u9898</span><input name="title" required></label><label><span>\u7b80\u4ecb</span><input name="description"></label><label><span>\u6807\u7b7e</span><input name="tags" placeholder="\u4eba\u6587, \u8857\u5934"></label><label><span>\u53c2\u8003\u94fe\u63a5</span><input name="source_url" type="url" placeholder="https://..."></label><input name="category_id" type="hidden" value=""><input name="show_in_inspiration" type="hidden" value="true"><input name="show_in_database" type="hidden" value="false"><button class="primary" type="submit">\u4e0a\u4f20\u5e76\u4fdd\u5b58</button><span class="inspiration-upload-status"></span></form><div class="inspiration-assignment-list">'+(assets.length?assets.map(item=>{const assignment=inspirationState.assignments[String(item.id)]||{};const channel=channels.find(entry=>entry.id===assignment.channel);const chapter=channel?.chapters?.find(entry=>entry.id===assignment.chapter);return '<article><div class="inspiration-assignment-thumb">'+(item.media_type==='video'?'VIDEO':item.file_path?'<img src="'+iEsc(item.file_path)+'">':'FILE')+'</div><div><b>'+iEsc(assignment.title||item.title||item.original_name||('#'+item.id))+'</b><p>'+iEsc((channel?.title||'\u672a\u5206\u7c7b')+' / '+(chapter?.title||'\u672a\u5206\u8282\u70b9'))+'</p><span>'+iEsc(assignment.description||item.description||'')+'</span></div><button type="button" data-i-delete-resource="'+item.id+'">\u5220\u9664</button></article>';}).join(''):'<p class="inspiration-empty">\u6682\u65e0\u7075\u611f\u7d20\u6750\u3002</p>')+'</div></section>';
 }
-async function loadInspirationAdmin(){if(!inspirationRoot)return;inspirationRoot.innerHTML='<div class="inspiration-loading">Loading inspiration archive...</div>';const config=await request('/api/inspiration-config');inspirationState.tree=config.tree;inspirationState.assignments=config.assignments||{};renderInspirationAdmin();}
-async function saveInspirationConfig(partial,message){const result=await request('/api/inspiration-config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(partial)});inspirationState.tree=result.tree;inspirationState.assignments=result.assignments||{};renderInspirationAdmin();notify(message||'\u5df2\u4fdd\u5b58\u5230\u4e91\u7aef');}
+async function loadInspirationAdmin(){if(!inspirationRoot)return;inspirationRoot.innerHTML='<div class="inspiration-loading">Loading inspiration assets...</div>';const config=await request('/api/inspiration-config');inspirationState.tree=config.tree;inspirationState.assignments=config.assignments||{};renderInspirationAdmin();}
+async function saveInspirationAssignments(message){const result=await request('/api/inspiration-config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({assignments:inspirationState.assignments})});inspirationState.assignments=result.assignments||{};notify(message);}
 function syncInspirationChapters(form){const channel=form.querySelector('[name="channel"]'),chapter=form.querySelector('[name="chapter"]');if(channel&&chapter)chapter.innerHTML=iChapterOptions(channel.value,'');}
 if(inspirationRoot){
   document.querySelector('[data-view="inspiration"]')?.addEventListener('click',()=>loadInspirationAdmin().catch(error=>{inspirationRoot.innerHTML='<p class="inspiration-error">'+iEsc(error.message)+'</p>';}));
-  inspirationRoot.addEventListener('input',event=>{const input=event.target;if(!input.dataset.iField)return;const channel=inspirationState.tree.channels[Number(input.dataset.iChannel)];const chapter=channel?.chapters?.[Number(input.dataset.iChapter)];if(input.dataset.iField==='channel-title')channel.title=input.value;if(input.dataset.iField==='channel-english')channel.english=input.value;if(input.dataset.iField==='channel-id')channel.id=iSlug(input.value,'channel-'+Date.now());if(!chapter)return;if(input.dataset.iField==='chapter-title')chapter.title=input.value;if(input.dataset.iField==='chapter-english')chapter.english=input.value;if(input.dataset.iField==='chapter-keywords')chapter.keywords=input.value.split(',').map(value=>value.trim()).filter(Boolean);});
   inspirationRoot.addEventListener('change',event=>{const form=event.target.closest('form');if(event.target.name==='channel'&&form)syncInspirationChapters(form);});
-  inspirationRoot.addEventListener('click', async (event) => {
-    const button=event.target.closest('button');
-    if(!button)return;
-    try {
-      if(button.dataset.iAddChannel!==undefined){
-        inspirationState.tree.channels.push({id:'channel-'+Date.now(),title:'\u65b0\u9891\u9053',english:'NEW CHANNEL',chapters:[]});
-        renderInspirationAdmin(); return;
-      }
-      if(button.dataset.iRemoveChannel!==undefined){
-        inspirationState.tree.channels.splice(Number(button.dataset.iRemoveChannel),1);
-        renderInspirationAdmin(); return;
-      }
-      if(button.dataset.iAddChapter!==undefined){
-        inspirationState.tree.channels[Number(button.dataset.iAddChapter)].chapters.push({id:'chapter-'+Date.now(),title:'\u65b0\u8282\u70b9',english:'NEW CHAPTER',keywords:[]});
-        renderInspirationAdmin(); return;
-      }
-      if(button.dataset.iRemoveChapter){
-        const [channelIndex,chapterIndex]=button.dataset.iRemoveChapter.split(':').map(Number);
-        inspirationState.tree.channels[channelIndex].chapters.splice(chapterIndex,1);
-        renderInspirationAdmin(); return;
-      }
-      if(button.dataset.iSaveTree!==undefined){
-        await saveInspirationConfig({tree:inspirationState.tree},'\u9891\u9053\u7ed3\u6784\u5df2\u4fdd\u5b58'); return;
-      }
-      if(button.dataset.iRemoveResource){
-        const id=button.dataset.iRemoveResource;
-        const item=state.media.find(media=>String(media.id)===String(id));
-        delete inspirationState.assignments[id];
-        if(item) await request('/api/media/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...item,show_in_inspiration:false})});
-        await saveInspirationConfig({assignments:inspirationState.assignments},'\u7d20\u6750\u5df2\u79fb\u51fa\u7075\u611f\u9891\u9053');
-        await loadAll();
-      }
-    } catch(error) { notify(error.message,true); }
-  });
-  inspirationRoot.addEventListener('submit', async (event) => {
-    const form=event.target;
-    if(form.id!=='inspiration-attach-form'&&form.id!=='inspiration-upload-form')return;
-    event.preventDefault();
-    try {
-      if(form.id==='inspiration-attach-form'){
-        const data=new FormData(form),id=String(data.get('media_id'));
-        const item=state.media.find(media=>String(media.id)===id);
-        if(!item)throw new Error('Please select an uploaded resource.');
-        inspirationState.assignments[id]={channel:String(data.get('channel')),chapter:String(data.get('chapter')),title:String(data.get('title')||''),description:String(data.get('description')||''),source_url:String(data.get('source_url')||''),tags:String(data.get('tags')||'')};
-        await request('/api/media/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...item,show_in_inspiration:true})});
-        await saveInspirationConfig({assignments:inspirationState.assignments},'\u7d20\u6750\u5df2\u5f52\u6863');
-        await loadAll();
-        return;
-      }
-      const status=form.querySelector('.inspiration-upload-status');
-      const files=[...form.elements.files.files];
-      if(!files.length)throw new Error('Please choose a file.');
-      if(status)status.textContent='Uploading...';
-      const category=state.categories.find(item=>item.slug===form.elements.channel.value);
-      form.elements.category_id.value=category?.id||'';
-      const created=shouldUseDirectUpload(files) ? await uploadMediaDirect(form,files,[]) : await request('/api/media/upload',{method:'POST',body:new FormData(form)});
-      created.forEach(item => {
-        inspirationState.assignments[String(item.id)]={channel:form.elements.channel.value,chapter:form.elements.chapter.value,title:String(form.elements.title.value||''),description:String(form.elements.description.value||''),source_url:String(form.elements.source_url.value||'')};
-      });
-      await saveInspirationConfig({assignments:inspirationState.assignments},'\u7d20\u6750\u5df2\u4e0a\u4f20\u5e76\u5f52\u6863');
-      await loadAll();
-    } catch(error) {
-      notify(error.message,true);
-      const status=form.querySelector('.inspiration-upload-status');
-      if(status)status.textContent=error.message;
-    }
-  });
+  inspirationRoot.addEventListener('click',async event=>{const button=event.target.closest('[data-i-delete-resource]');if(!button)return;if(!confirm('\u786e\u5b9a\u5220\u9664\u8fd9\u4e2a\u7075\u611f\u7d20\u6750\u5417\uff1f'))return;try{const id=button.dataset.iDeleteResource;await request('/api/media/'+id,{method:'DELETE'});delete inspirationState.assignments[id];await saveInspirationAssignments('\u7075\u611f\u7d20\u6750\u5df2\u5220\u9664');await loadAll();renderInspirationAdmin();}catch(error){notify(error.message,true);}});
+  inspirationRoot.addEventListener('submit',async event=>{const form=event.target;if(form.id!=='inspiration-upload-form')return;event.preventDefault();const status=form.querySelector('.inspiration-upload-status');try{const files=[...form.elements.files.files];if(!files.length)throw new Error('Please choose a file.');if(status)status.textContent='Uploading...';const created=shouldUseDirectUpload(files)?await uploadMediaDirect(form,files,[],status):await request('/api/media/upload',{method:'POST',body:new FormData(form)});created.forEach(item=>{inspirationState.assignments[String(item.id)]={channel:form.elements.channel.value,chapter:form.elements.chapter.value,title:String(form.elements.title.value||''),description:String(form.elements.description.value||''),source_url:String(form.elements.source_url.value||''),tags:String(form.elements.tags.value||'')};});await saveInspirationAssignments('\u7075\u611f\u7d20\u6750\u5df2\u4fdd\u5b58');form.reset();await loadAll();renderInspirationAdmin();}catch(error){if(status)status.textContent=error.message;notify(error.message,true);}});
 }

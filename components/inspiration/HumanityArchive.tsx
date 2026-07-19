@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useFrame, useLoader } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
@@ -22,6 +22,10 @@ function buildLayout(items: Media[]) {
 }
 
 function ArchivePlane({ entry, texture, controls, onSelect, reducedMotion }: { entry: Layout; texture: THREE.Texture; controls: MutableRefObject<ArchiveControls>; onSelect: (item: Media) => void; reducedMotion: boolean }) {
+  const textureImage = texture.image as { width?: number; height?: number };
+  const ratio = textureImage?.width && textureImage?.height ? textureImage.width / textureImage.height : entry.width / entry.height;
+  const height = entry.height;
+  const width = Math.max(.9, Math.min(entry.width * 1.5, height * ratio));
   const mesh = useRef<THREE.Mesh>(null), material = useRef<THREE.MeshBasicMaterial>(null), baseZ = useRef(entry.z);
   useFrame(({ camera }, delta) => {
     const node = mesh.current, surface = material.current;
@@ -35,10 +39,10 @@ function ArchivePlane({ entry, texture, controls, onSelect, reducedMotion }: { e
     node.scale.lerp(new THREE.Vector3(scale, scale, 1), Math.min(1, delta * 2.8));
     if (!reducedMotion && !entry.anchor) node.rotation.z = entry.rotation + Math.sin(performance.now() * .00025 + entry.x) * .014;
   });
-  useEffect(() => { texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4; texture.needsUpdate = true; }, [texture]);
+  useEffect(() => { texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8; texture.minFilter = THREE.LinearMipmapLinearFilter; texture.magFilter = THREE.LinearFilter; texture.needsUpdate = true; }, [texture]);
   return <mesh ref={mesh} position={[entry.x, entry.y, baseZ.current]} rotation={[0, 0, entry.rotation]} onClick={(event) => { event.stopPropagation(); onSelect(entry.item); }}>
-    <planeGeometry args={[entry.width, entry.height]} />
-    <meshBasicMaterial ref={material} map={texture} color="#d7d7d3" transparent opacity={entry.anchor ? .92 : .66} depthWrite={false} toneMapped={false} />
+    <planeGeometry args={[width, height]} />
+    <meshBasicMaterial ref={material} map={texture} color="#ffffff" transparent opacity={entry.anchor ? 1 : .9} depthWrite={false} toneMapped={false} />
   </mesh>;
 }
 
@@ -56,3 +60,4 @@ export default function HumanityArchive({ items, controls, onSelect, reducedMoti
   if (!layout.length) return null;
   return <group ref={group}>{layout.map((entry, index) => <ArchivePlane key={entry.item.id} entry={entry} texture={loaded[index]} controls={controls} onSelect={onSelect} reducedMotion={reducedMotion} />)}</group>;
 }
+

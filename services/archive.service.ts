@@ -76,30 +76,9 @@ function inferMediaTypeFromMime(mimeType = "", filename = "") {
   return "file";
 }
 
-let storageBucketReady = false;
-
-async function ensureStorageBucket() {
-  if (storageBucketReady) return;
-  const supabase = getSupabaseServer();
-  const existing = await supabase.storage.getBucket(SUPABASE_MEDIA_BUCKET);
-  if (!existing.error) {
-    storageBucketReady = true;
-    return;
-  }
-  const created = await supabase.storage.createBucket(SUPABASE_MEDIA_BUCKET, {
-    public: true,
-    fileSizeLimit: 1024 * 1024 * 1024,
-    allowedMimeTypes: null
-  });
-  if (created.error && !/already exists/i.test(created.error.message)) {
-    throw new Error(`Supabase Storage bucket ${SUPABASE_MEDIA_BUCKET} is not available: ${created.error.message}`);
-  }
-  storageBucketReady = true;
-}
 async function uploadToStorage(file: File | null) {
   if (!file || !file.size) return null;
   const supabase = getSupabaseServer();
-  await ensureStorageBucket();
   const extension = extensionFor(file.name);
   const storagePath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
   const { error } = await supabase.storage
@@ -108,7 +87,7 @@ async function uploadToStorage(file: File | null) {
       contentType: file.type || mimeTypeForExtension(extension),
       upsert: false
     });
-  if (error) throw new Error(`Supabase Storage upload failed: ${error.message}`);
+  if (error) throw new Error(`Upload failed: ${error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists and check the file size and format.`);
   const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
   return {
     filename: storagePath.split("/").pop() || storagePath,
@@ -122,13 +101,12 @@ async function uploadToStorage(file: File | null) {
 }
 async function createSignedStorageUpload(filename: string, contentType = "", size = 0) {
   const supabase = getSupabaseServer();
-  await ensureStorageBucket();
   const extension = extensionFor(filename);
   const storagePath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
   const signed = await supabase.storage
     .from(SUPABASE_MEDIA_BUCKET)
     .createSignedUploadUrl(storagePath);
-  if (signed.error) throw new Error(`Supabase signed upload failed: ${signed.error.message}`);
+  if (signed.error) throw new Error(`Upload preparation failed: ${signed.error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists.`);
   const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
   return {
     filename: storagePath.split("/").pop() || storagePath,
@@ -230,6 +208,25 @@ async function projectWithRelations(project: any) {
     media: (mediaResult.data || []).map(normalizeMedia),
     category: categoryResult.data
   };
+}
+
+async function createMediaBatch(payloads: Record<string, unknown>[], tagIds: unknown[] = []) {
+  if (!payloads.length) return [];
+  const supabase = getSupabaseServer();
+  const { data, error } = await supabase.from("media").insert(payloads).select("*");
+  if (error) throw new Error(`Upload failed: ${error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists and check the file size and format.`);
+
+  const normalized = (data || []).map(normalizeMedia);
+  const tags = parseTagIds(tagIds).map(Number).filter(Boolean);
+  if (tags.length && normalized.length) {
+    const links = normalized.flatMap((media: any) => tags.map((tagId: number) => ({ media_id: media.id, tag_id: tagId })));
+    const { error: tagError } = await supabase.from("media_tags").insert(links);
+    if (tagError) throw new Error(`Media tag save failed: ${tagError.message}`);
+  }
+
+  const hero = normalized.find((media: any) => media.is_hero);
+  if (hero) await syncHero(hero);
+  return normalized;
 }
 
 async function syncHero(media: any) {
@@ -501,60 +498,17 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     const body: any = await request.json().catch(() => ({}));
     const files = Array.isArray(body.files) ? body.files : [];
     if (!files.length) return json({ error: "No uploaded files" }, 400);
-    const created = [];
-    for (let index = 0; index < files.length; index += 1) {
-      const payload = mediaPayloadFromSaved(files[index], body, index);
-      const { data, error } = await supabase.from("media").insert(payload).select("*").single();
-      if (error) throw error;
-      if (body.tag_ids !== undefined) await replaceTagLinks("media_tags", "media_id", data.id, parseTagIds(body.tag_ids));
-      await syncHero(data);
-      created.push(normalizeMedia(data));
-    }
-    return json(created, 201);
+    const payloads = files.map((file: any, index: number) => mediaPayloadFromSaved(file, body, index));
+    return json(await createMediaBatch(payloads, parseTagIds(body.tag_ids)), 201);
   }
   if (route === "media/upload") {
     const form = await request.formData();
     const files = form.getAll("files").filter((item): item is File => item instanceof File && item.size > 0);
     if (!files.length) return json({ error: "Bad request" }, 400);
-    const created = [];
-    for (let index = 0; index < files.length; index += 1) {
-      const saved = await uploadToStorage(files[index]);
-      if (!saved) continue;
-      const mediaType = inferMediaTypeFromMime(saved.mimetype, saved.originalname);
-      const payload = {
-        project_id: formValue(form,"project_id") ? Number(formValue(form,"project_id")) : null,
-        category_id: formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null,
-        title: formValue(form,"title") || saved.originalname,
-        description: formValue(form,"description"),
-        file_path: saved.public_url,
-        original_name: saved.originalname,
-        file_type: extensionFor(saved.originalname),
-        mime_type: saved.mimetype,
-        size: saved.size,
-        media_type: mediaType,
-        tags: formValue(form,"tags"),
-        camera: formValue(form,"camera"),
-        lens: formValue(form,"lens"),
-        aperture: formValue(form,"aperture"),
-        shutter_speed: formValue(form,"shutter_speed"),
-        iso: formValue(form,"iso"),
-        captured_at: formValue(form,"captured_at"),
-        is_hero: index === 0 ? toBool(form.get("is_hero")) : false,
-        is_selected: toBool(form.get("is_selected")),
-        is_cover: mediaType === "image" ? toBool(form.get("is_cover")) : false,
-        show_in_database: toBool(form.get("show_in_database")),
-        show_in_inspiration: toBool(form.get("show_in_inspiration")),
-        sort_order: (Number(formValue(form,"sort_order")) || 0) + index,
-        created_at: now(),
-        updated_at: now()
-      };
-      const { data, error } = await supabase.from("media").insert(payload).select("*").single();
-      if (error) throw error;
-      if (form.get("tag_ids")) await replaceTagLinks("media_tags", "media_id", data.id, parseTagIds(formValue(form,"tag_ids","[]")));
-      await syncHero(data);
-      created.push(normalizeMedia(data));
-    }
-    return json(created, 201);
+    const values = Object.fromEntries(form.entries());
+    const savedFiles = await Promise.all(files.map((file) => uploadToStorage(file)));
+    const payloads = savedFiles.filter(Boolean).map((saved, index) => mediaPayloadFromSaved(saved, values, index));
+    return json(await createMediaBatch(payloads, parseTagIds(formValue(form,"tag_ids","[]"))), 201);
   }
 
   return json({ error: "Not found" }, 404);
@@ -570,8 +524,11 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
     const values: Record<string, string> = {};
     if (body.tree !== undefined) values.inspiration_tree_json = JSON.stringify(parseInspirationTree(body.tree));
     if (body.assignments !== undefined) values.inspiration_resource_map_json = JSON.stringify(parseInspirationResourceMap(body.assignments));
-    const settings = await setSettings(values);
-    return json({ tree: parseInspirationTree(settings.inspiration_tree_json), assignments: parseInspirationResourceMap(settings.inspiration_resource_map_json) });
+    await setSettings(values);
+    return json({
+      tree: body.tree !== undefined ? parseInspirationTree(body.tree) : undefined,
+      assignments: body.assignments !== undefined ? parseInspirationResourceMap(body.assignments) : undefined
+    });
   }
 
   if (path[0] === "settings") {

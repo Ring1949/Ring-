@@ -38,7 +38,9 @@ export async function setSettings(values: Record<string, unknown>) {
       .upsert(rows, { onConflict: "key" });
     if (error) throw error;
   }
-  return getSettings();
+  // The admin already holds the current settings in memory. Returning only the
+  // changed values prevents every save from making a second full-table read.
+  return Object.fromEntries(rows.map(({ key, value }) => [key, value]));
 }
 
 export async function replaceTagLinks(table: string, ownerColumn: string, ownerId: number, tagIds: unknown[] = []) {

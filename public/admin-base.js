@@ -1,11 +1,26 @@
 const state = { settings:{}, categories:[], projects:[], media:[], tags:[] };
 const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4e0a\u4f20\u4f5c\u54c1",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u4f5c\u54c1\u7ba1\u7406",inspiration:"\u7075\u611f\u9891\u9053",contact:"\u8054\u7cfb\u65b9\u5f0f" };
 
+const REQUEST_TIMEOUT_MS = 45000;
+function readableRequestError(error, action = "操作") {
+  const message = String(error?.message || error || "");
+  if (error?.name === "AbortError") return `${action}超时，请检查网络后重试。`;
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return `${action}失败：网络连接不可用，请检查网络后重试。`;
+  return `${action}失败：${message || "服务器未返回可用信息，请稍后重试。"}`;
+}
 async function request(url, options = {}) {
-  const response = await fetch(url, options);
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || "操作失败");
-  return payload;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { ...options, signal: options.signal || controller.signal });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `服务器返回 ${response.status}`);
+    return payload;
+  } catch (error) {
+    throw new Error(readableRequestError(error));
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 function notify(message, error = false) {
   const status = document.querySelector("#save-status");
@@ -23,14 +38,17 @@ async function uploadHeroBackgroundFile(file) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size })
   });
-  const body = new FormData();
-  body.append("cacheControl", "3600");
-  body.append("", file);
-  const uploadResponse = await fetch(signed.signed_url, {
-    method: "PUT",
-    headers: signed.upload_headers || {},
-    body
-  });
+  const body = file;
+  let uploadResponse;
+  try {
+    uploadResponse = await fetch(signed.signed_url, {
+      method: "PUT",
+      headers: signed.upload_headers || {},
+      body
+    });
+  } catch {
+    throw new Error("主视觉文件上传失败：无法连接到 Supabase Storage，请检查网络后重试。");
+  }
   if (!uploadResponse.ok) {
     const detail = await uploadResponse.text().catch(() => "");
     throw new Error(`Hero file upload failed: ${uploadResponse.status} ${detail}`.trim());
@@ -88,7 +106,7 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
     const data = new FormData(event.target);
     const heroFile = data.get("hero_background_file");
     data.delete("hero_background_file");
-    state.settings = await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(data))});
+    state.settings = { ...state.settings, ...await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(data))}) };
     if (heroFile?.size) {
       await uploadHeroBackgroundFile(heroFile);
       event.target.hero_background_file.value = "";
@@ -107,7 +125,7 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
 if(false) document.querySelector("#contact-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    state.settings = await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(formDataObject(event.target))});
+    state.settings = { ...state.settings, ...await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(formDataObject(event.target))}) };
     renderSettings();
     notify("联系方式已保存");
   } catch (error) { notify(error.message,true); }
@@ -210,7 +228,7 @@ document.querySelector("#contact-form").addEventListener("submit", async (event)
   const status = document.querySelector("#contact-save-status");
   try {
     if (status) { status.textContent = "\u6b63\u5728\u4fdd\u5b58\u8054\u7cfb\u4fe1\u606f\u2026"; status.className = "media-upload-status wide working"; }
-    state.settings = await request("/api/settings", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(formDataObject(event.target)) });
+    state.settings = { ...state.settings, ...await request("/api/settings", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(formDataObject(event.target)) }) };
     renderSettings();
     if (status) { status.textContent = "\u8054\u7cfb\u4fe1\u606f\u5df2\u4fdd\u5b58\u5e76\u4f1a\u540c\u6b65\u5230\u7f51\u7ad9\u3002"; status.className = "media-upload-status wide success"; }
     notify("\u8054\u7cfb\u65b9\u5f0f\u5df2\u4fdd\u5b58");
