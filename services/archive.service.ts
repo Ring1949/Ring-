@@ -156,6 +156,27 @@ function mediaPayloadFromSaved(saved: any, values: any, index = 0) {
   };
 }
 
+/**
+ * Inspiration assets are media rows; their channel placement is stored in the
+ * Supabase-backed settings record. Saving both on the server prevents a slow
+ * browser request from leaving a new asset without its selected node.
+ */
+async function saveInspirationAssignments(mediaRows: any[], values: any) {
+  const channel = String(values.inspiration_channel ?? values.channel ?? "").trim();
+  const chapter = String(values.inspiration_chapter ?? values.chapter ?? "").trim();
+  if (!channel || !chapter || !mediaRows.length) return;
+
+  const settings = await getSettings();
+  const assignments = parseInspirationResourceMap(settings.inspiration_resource_map_json);
+  const title = String(values.title || "").trim();
+  const description = String(values.description || "").trim();
+  const sourceUrl = String(values.source_url || "").trim();
+  const tags = String(values.tags || "").trim();
+  mediaRows.forEach((item) => {
+    assignments[String(item.id)] = { channel, chapter, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(sourceUrl ? { source_url: sourceUrl } : {}), ...(tags ? { tags } : {}) };
+  });
+  await setSettings({ inspiration_resource_map_json: JSON.stringify(assignments) });
+}
 function storagePathFromPublicUrl(url: string) {
   if (!url) return "";
   const marker = `/storage/v1/object/public/${SUPABASE_MEDIA_BUCKET}/`;
@@ -499,7 +520,9 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     const files = Array.isArray(body.files) ? body.files : [];
     if (!files.length) return json({ error: "No uploaded files" }, 400);
     const payloads = files.map((file: any, index: number) => mediaPayloadFromSaved(file, body, index));
-    return json(await createMediaBatch(payloads, parseTagIds(body.tag_ids)), 201);
+    const created = await createMediaBatch(payloads, parseTagIds(body.tag_ids));
+    if (toBool(body.show_in_inspiration)) await saveInspirationAssignments(created, body);
+    return json(created, 201);
   }
   if (route === "media/upload") {
     const form = await request.formData();
@@ -508,7 +531,9 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     const values = Object.fromEntries(form.entries());
     const savedFiles = await Promise.all(files.map((file) => uploadToStorage(file)));
     const payloads = savedFiles.filter(Boolean).map((saved, index) => mediaPayloadFromSaved(saved, values, index));
-    return json(await createMediaBatch(payloads, parseTagIds(formValue(form,"tag_ids","[]"))), 201);
+    const created = await createMediaBatch(payloads, parseTagIds(formValue(form,"tag_ids","[]")));
+    if (toBool(values.show_in_inspiration)) await saveInspirationAssignments(created, values);
+    return json(created, 201);
   }
 
   return json({ error: "Not found" }, 404);

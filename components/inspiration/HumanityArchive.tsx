@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useFrame, useLoader } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
@@ -17,7 +17,7 @@ function buildLayout(items: Media[]) {
     if (index === 0) return { item, x: 0, y: 0.85, z: -1.4, rotation: 0, width: 4.3, height: 3.15, anchor: true };
     const layer = Math.floor((index - 1) / 8), angle = index * 2.399963 + random() * 0.5;
     const radius = 7 + layer * 3.4 + random() * 5.5;
-    return { item, x: Math.cos(angle) * radius, y: Math.sin(angle) * radius * 0.58 + (random() - .5) * 4.8, z: -8 - layer * 6.3 - random() * 11, rotation: (random() - .5) * .32, width: 1.8 + random() * 2.2, height: 1.25 + random() * 1.65, anchor: false };
+    return { item, x: Math.cos(angle) * radius, y: Math.sin(angle) * radius * 0.58 + (random() - .5) * 4.8, z: -8 - layer * 6.3 - random() * 11, rotation: (random() - .5) * .32, width: 2.25 + random() * 2.55, height: 1.55 + random() * 1.8, anchor: false };
   });
 }
 
@@ -26,24 +26,24 @@ function ArchivePlane({ entry, texture, controls, onSelect, reducedMotion }: { e
   const ratio = textureImage?.width && textureImage?.height ? textureImage.width / textureImage.height : entry.width / entry.height;
   const height = entry.height;
   const width = Math.max(.9, Math.min(entry.width * 1.5, height * ratio));
-  const mesh = useRef<THREE.Mesh>(null), material = useRef<THREE.MeshBasicMaterial>(null), baseZ = useRef(entry.z);
+  const mesh = useRef<THREE.Group>(null), material = useRef<THREE.MeshBasicMaterial>(null), baseZ = useRef(entry.z);
   useFrame(({ camera }, delta) => {
     const node = mesh.current, surface = material.current;
     if (!node || !surface) return;
     if (!entry.anchor && node.position.z > camera.position.z + 7) node.position.z -= 72;
     if (!entry.anchor && node.position.z < camera.position.z - 78) node.position.z += 72;
     const distance = camera.position.distanceTo(node.getWorldPosition(new THREE.Vector3()));
-    const presence = entry.anchor ? 1 : THREE.MathUtils.clamp(1.08 - distance / 60, .13, .82);
+    const presence = entry.anchor ? 1 : THREE.MathUtils.clamp(1.12 - distance / 60, .24, .9);
     surface.opacity += (presence - surface.opacity) * Math.min(1, delta * 3.2);
-    const scale = entry.anchor ? 1 : THREE.MathUtils.clamp(1.22 - distance / 95, .48, 1.05);
+    const scale = entry.anchor ? 1 : THREE.MathUtils.clamp(1.24 - distance / 95, .64, 1.08);
     node.scale.lerp(new THREE.Vector3(scale, scale, 1), Math.min(1, delta * 2.8));
     if (!reducedMotion && !entry.anchor) node.rotation.z = entry.rotation + Math.sin(performance.now() * .00025 + entry.x) * .014;
   });
   useEffect(() => { texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8; texture.minFilter = THREE.LinearMipmapLinearFilter; texture.magFilter = THREE.LinearFilter; texture.needsUpdate = true; }, [texture]);
-  return <mesh ref={mesh} position={[entry.x, entry.y, baseZ.current]} rotation={[0, 0, entry.rotation]} onClick={(event) => { event.stopPropagation(); onSelect(entry.item); }}>
-    <planeGeometry args={[width, height]} />
-    <meshBasicMaterial ref={material} map={texture} color="#ffffff" transparent opacity={entry.anchor ? 1 : .9} depthWrite={false} toneMapped={false} />
-  </mesh>;
+  return <group ref={mesh} position={[entry.x, entry.y, baseZ.current]} rotation={[0, 0, entry.rotation]} onClick={(event) => { event.stopPropagation(); onSelect(entry.item); }}>
+    <mesh position={[0, 0, -0.012]}><planeGeometry args={[width + .12, height + .12]} /><meshBasicMaterial color="#f7f7f2" transparent opacity={entry.anchor ? .92 : .72} depthWrite={false} toneMapped={false} /></mesh>
+    <mesh><planeGeometry args={[width, height]} /><meshBasicMaterial ref={material} map={texture} color="#ffffff" transparent opacity={entry.anchor ? 1 : .94} depthWrite={false} toneMapped={false} /></mesh>
+  </group>;
 }
 
 export default function HumanityArchive({ items, controls, onSelect, reducedMotion = false }: Props) {
