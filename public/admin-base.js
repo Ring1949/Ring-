@@ -97,32 +97,42 @@ function renderSettings() {
     Object.entries(state.settings).forEach(([key,value]) => { if (form?.elements[key]) form.elements[key].value = value; });
   });
 }
-document.querySelector("#settings-form").addEventListener("submit", async (event) => {
+const settingsForm = document.querySelector("#settings-form");
+settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const status = document.querySelector("#settings-save-status");
+  const submitButton = settingsForm.querySelector('button[type="submit"], button.primary');
+  const setStatus = (message, kind) => {
+    status.textContent = message;
+    status.className = `media-upload-status wide ${kind}`;
+  };
   try {
-    status.textContent = "正在保存首页设置…";
-    status.className = "media-upload-status wide working";
-    const data = new FormData(event.target);
+    submitButton.disabled = true;
+    setStatus("\u6b63\u5728\u4fdd\u5b58\u9996\u9875\u8bbe\u7f6e\u2026", "working");
+    const data = new FormData(settingsForm);
     const heroFile = data.get("hero_background_file");
     data.delete("hero_background_file");
-    state.settings = { ...state.settings, ...await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(data))}) };
+    const savedSettings = await request("/api/settings", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(Object.fromEntries(data)) });
+    state.settings = { ...state.settings, ...savedSettings };
     if (heroFile?.size) {
+      setStatus("\u9996\u9875\u6587\u6848\u5df2\u4fdd\u5b58\uff0c\u6b63\u5728\u4e0a\u4f20\u80cc\u666f\u6587\u4ef6\u2026", "working");
       await uploadHeroBackgroundFile(heroFile);
-      event.target.hero_background_file.value = "";
-      document.querySelector("#hero-file-name").textContent = "未选择新文件时，保留当前背景";
+      settingsForm.hero_background_file.value = "";
+      document.querySelector("#hero-file-name").textContent = "\u672a\u9009\u62e9\u65b0\u6587\u4ef6\u65f6\uff0c\u4fdd\u7559\u5f53\u524d\u80cc\u666f";
       document.querySelector("#hero-file-preview").innerHTML = "";
+      setStatus("\u9996\u9875\u8bbe\u7f6e\u548c\u80cc\u666f\u5df2\u4fdd\u5b58\u3002", "success");
+    } else {
+      setStatus("\u9996\u9875\u8bbe\u7f6e\u5df2\u4fdd\u5b58\u3002", "success");
     }
-    status.textContent = "首页设置已保存，刷新首页即可查看。";
-    status.className = "media-upload-status wide success";
-    notify("首页设置已保存");
+    notify("\u9996\u9875\u8bbe\u7f6e\u5df2\u4fdd\u5b58");
   } catch (error) {
-    status.textContent = `保存失败：${error.message}`;
-    status.className = "media-upload-status wide error";
-    notify(error.message,true);
+    const message = error?.message || "\u672a\u77e5\u9519\u8bef";
+    setStatus(`\u4fdd\u5b58\u5931\u8d25\uff1a${message}`, "error");
+    notify(message, true);
+  } finally {
+    submitButton.disabled = false;
   }
-});
-if(false) document.querySelector("#contact-form").addEventListener("submit", async (event) => {
+});if(false) document.querySelector("#contact-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     state.settings = { ...state.settings, ...await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(formDataObject(event.target))}) };
