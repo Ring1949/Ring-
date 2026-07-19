@@ -39,3 +39,43 @@ body{background:var(--works-bg);color:var(--works-ink);transition:background .35
 .primary-filters button.active{border-color:#292a28;color:#fff;background:#292a28}
 :root[data-theme="dark"] .primary-filters button.active{border-color:#f2f2ef;color:#151515;background:#f2f2ef}
 @media(max-width:700px){.primary-filters{justify-content:flex-start;padding:0 2px}}
+/* Works page now shares the home navigation anatomy: navigation stays left, utilities remain right. */
+.works-nav.nav{
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr) auto!important;
+  justify-content:initial!important;
+  gap:clamp(20px,3.2vw,52px)!important;
+  height:70px!important;
+  padding:0 clamp(22px,4vw,64px)!important;
+  align-items:center!important;
+}
+.works-nav .brand{
+  width:118px!important;
+  height:48px!important;
+  flex:0 0 auto!important;
+  background-image:url("/assets/ring-logo-dark.png")!important;
+}
+.works-nav .main-nav{
+  width:auto!important;
+  margin:0!important;
+  justify-self:start!important;
+  display:flex!important;
+  align-items:center!important;
+}
+.works-nav .nav-actions{
+  justify-self:end!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  min-width:max-content!important;
+}
+.works-nav .nav-actions .avatar{order:3}
+.works-nav .nav-actions .theme-toggle{order:1}
+.works-nav .nav-actions .language-toggle{order:2}
+:root[data-theme="dark"] .works-nav .brand{background-image:url("/assets/ring-logo-transparent.png")!important}
+:root[data-theme="dark"] .works-nav .main-nav a{color:var(--works-sub)!important}
+:root[data-theme="dark"] .works-nav .main-nav a.active{color:var(--works-ink)!important}
+@media(max-width:700px){
+  .works-nav.nav{height:auto!important;grid-template-columns:1fr auto!important;gap:10px 16px!important;padding:14px 18px!important}
+  .works-nav .main-nav{grid-column:1/-1;grid-row:2;width:100%!important;overflow:auto!important}
+}
