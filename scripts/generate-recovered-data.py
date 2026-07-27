@@ -11,11 +11,15 @@ def repair_text(value):
     if value is None: return ''
     if not isinstance(value, str): return value
     candidates = [value]
+    try:
+        candidates.append(value.encode('latin1').decode('utf-8'))
+    except Exception:
+        pass
     for enc in ('gbk','cp936'):
         try: candidates.append(value.encode(enc, errors='ignore').decode('utf-8', errors='ignore'))
         except Exception: pass
     def score(text): return sum('\u4e00' <= ch <= '\u9fff' for ch in text) - text.count('\ufffd')*3 - text.count('?')
-    return max(candidates, key=score)
+    return max(candidates, key=score).replace('????', '????')
 
 def rowdict(row): return {k: repair_text(row[k]) for k in row.keys()}
 def safe_name(name): return (re.sub(r'[^A-Za-z0-9._-]+','-',name).strip('-') or 'media')[:90]
@@ -99,3 +103,4 @@ def main():
     (ROOT/'lib'/'recovered-data.ts').write_text(output, encoding='utf-8')
     print(json.dumps({'matched':matched,'total':len(media),'out':str(OUT_DIR)}, ensure_ascii=False))
 if __name__ == '__main__': main()
+
