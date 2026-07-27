@@ -24,6 +24,11 @@ def repair_text(value):
 def rowdict(row): return {k: repair_text(row[k]) for k in row.keys()}
 def safe_name(name): return (re.sub(r'[^A-Za-z0-9._-]+','-',name).strip('-') or 'media')[:90]
 def flag(v): return 1 if v is True or v == 1 else 0
+def visual_media(item):
+    media_type = str(item.get('media_type') or '').lower()
+    mime_type = str(item.get('mime_type') or '').lower()
+    file_path = str(item.get('file_path') or '')
+    return bool(file_path) and (media_type in ('image', 'video') or mime_type.startswith(('image/', 'video/')))
 
 def collect_files():
     files=[]
@@ -90,6 +95,19 @@ def main():
         c=cat_by_id.get(m.get('category_id')); p=proj_by_id.get(m.get('project_id'))
         m['category_name']=c.get('name') if c else ''; m['category_slug']=c.get('slug') if c else ''
         m['project_title']=p.get('title') if p else ''; m['project_slug']=p.get('slug') if p else ''; m['project_year']=p.get('year') if p else ''; m['project_location']=p.get('location') if p else ''
+    fallback_media=next((m for m in media if visual_media(m)), None)
+    for c in categories:
+        category_media=[m for m in media if m.get('category_id')==c.get('id') and visual_media(m)]
+        cover=category_media[0] if category_media else fallback_media
+        if cover and not c.get('cover_image'): c['cover_image']=cover.get('file_path') or ''
+    for p in projects:
+        project_media=[m for m in media if m.get('project_id')==p.get('id') and visual_media(m)]
+        category_media=[m for m in media if m.get('category_id')==p.get('category_id') and visual_media(m)]
+        cover=next((m for m in project_media if flag(m.get('is_cover'))), None) or (project_media[0] if project_media else None) or (category_media[0] if category_media else None) or fallback_media
+        if cover:
+            if not p.get('cover_image'): p['cover_image']=cover.get('file_path') or ''
+            p['series_cover']=p.get('cover_image') or cover.get('file_path') or ''
+            p['series_media_type']=cover.get('media_type') or ('video' if str(cover.get('mime_type') or '').startswith('video/') else 'image')
     hero=next((m for m in media if flag(m.get('is_hero')) and m.get('file_path')), None)
     if not settings.get('hero_media'):
         settings['hero_media']=hero.get('file_path') if hero else '/assets/hero-default.jpg'; settings['hero_media_type']=hero.get('media_type') if hero else 'image'
@@ -103,6 +121,4 @@ def main():
     (ROOT/'lib'/'recovered-data.ts').write_text(output, encoding='utf-8')
     print(json.dumps({'matched':matched,'total':len(media),'out':str(OUT_DIR)}, ensure_ascii=False))
 if __name__ == '__main__': main()
-
-
 

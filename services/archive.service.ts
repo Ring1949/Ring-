@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { getSettings, now, replaceTagLinks, setSettings, slugify } from "@/lib/db";
 import { getSupabaseServer, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
 import { bool, formValue, isAdmin, json, parseTagIds, requireAdmin } from "@/lib/utils";
@@ -76,6 +76,19 @@ function inferMediaTypeFromMime(mimeType = "", filename = "") {
   return "file";
 }
 
+async function verifyStorageObject(storagePath: string, expectedSize = 0) {
+  if (!storagePath) throw new Error("Upload verification failed: empty storage path.");
+  const slash = storagePath.lastIndexOf("/");
+  const folder = slash >= 0 ? storagePath.slice(0, slash) : "";
+  const name = slash >= 0 ? storagePath.slice(slash + 1) : storagePath;
+  const { data, error } = await getSupabaseServer().storage.from(SUPABASE_MEDIA_BUCKET).list(folder || undefined, { search: name, limit: 20 });
+  if (error) throw new Error(`Upload verification failed: ${error.message}`);
+  const item = (data || []).find((entry: any) => entry.name === name);
+  if (!item) throw new Error("Upload verification failed: file is missing from Storage.");
+  const storedSize = Number((item as any).metadata?.size || 0);
+  if (expectedSize > 0 && storedSize > 0 && storedSize !== expectedSize) throw new Error("Upload verification failed: stored file size does not match the uploaded file.");
+}
+
 async function uploadToStorage(file: File | null) {
   if (!file || !file.size) return null;
   const supabase = getSupabaseServer();
@@ -88,6 +101,7 @@ async function uploadToStorage(file: File | null) {
       upsert: false
     });
   if (error) throw new Error(`Upload failed: ${error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists and check the file size and format.`);
+  await verifyStorageObject(storagePath, file.size);
   const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
   return {
     filename: storagePath.split("/").pop() || storagePath,
@@ -133,6 +147,7 @@ function mediaPayloadFromSaved(saved: any, values: any, index = 0) {
     title: values.title || saved.originalname,
     description: values.description || "",
     file_path: saved.public_url,
+    storage_path: saved.storage_path || "",
     original_name: saved.originalname,
     file_type: extensionFor(saved.originalname),
     mime_type: saved.mimetype,
@@ -234,8 +249,12 @@ async function projectWithRelations(project: any) {
 async function createMediaBatch(payloads: Record<string, unknown>[], tagIds: unknown[] = []) {
   if (!payloads.length) return [];
   const supabase = getSupabaseServer();
+  const storagePaths = payloads.map((payload: any) => String(payload.storage_path || "")).filter(Boolean);
   const { data, error } = await supabase.from("media").insert(payloads).select("*");
-  if (error) throw new Error(`Upload failed: ${error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists and check the file size and format.`);
+  if (error) {
+    if (storagePaths.length) await supabase.storage.from(SUPABASE_MEDIA_BUCKET).remove(storagePaths).catch(() => undefined as any);
+    throw new Error(`Upload failed: ${error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists and check the file size and format.`);
+  }
 
   const normalized = (data || []).map(normalizeMedia);
   const tags = parseTagIds(tagIds).map(Number).filter(Boolean);
@@ -519,6 +538,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     const body: any = await request.json().catch(() => ({}));
     const files = Array.isArray(body.files) ? body.files : [];
     if (!files.length) return json({ error: "No uploaded files" }, 400);
+    await Promise.all(files.map((file: any) => verifyStorageObject(String(file.storage_path || ""), Number(file.size) || 0)));
     const payloads = files.map((file: any, index: number) => mediaPayloadFromSaved(file, body, index));
     const created = await createMediaBatch(payloads, parseTagIds(body.tag_ids));
     if (toBool(body.show_in_inspiration)) await saveInspirationAssignments(created, body);
@@ -691,3 +711,5 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
   }
   return json({ error: "Not found" }, 404);
 }
+
+
