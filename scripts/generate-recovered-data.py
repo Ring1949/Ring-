@@ -80,8 +80,8 @@ def main():
     for k,v in list(settings.items()):
         if v in path_map: settings[k]=path_map[v]
         elif isinstance(v,str) and v.startswith('/uploads/'): settings[k]=''
-    settings['site_name']=settings.get('site_name') or '\u5c71\u5ddd\u884c\u6b62'
-    settings['hero_title']=settings.get('hero_title') or '\u5c71\u5ddd\u884c\u6b62'
+    settings['site_name']='\u5c71\u5ddd\u884c\u6b62'
+    settings['hero_title']='\u5c71\u5ddd\u884c\u6b62'
     settings['hero_subtitle']=settings.get('hero_subtitle') or '\u6444\u5f71 / \u5e73\u9762\u8bbe\u8ba1 / \u7a7a\u95f4 / \u65e5\u5e38\u7814\u7a76'
     cat_by_id={c.get('id'):c for c in categories}; proj_by_id={p.get('id'):p for p in projects}
     for p in projects:
@@ -103,4 +103,6 @@ def main():
     (ROOT/'lib'/'recovered-data.ts').write_text(output, encoding='utf-8')
     print(json.dumps({'matched':matched,'total':len(media),'out':str(OUT_DIR)}, ensure_ascii=False))
 if __name__ == '__main__': main()
+
+
 
