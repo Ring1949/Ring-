@@ -1,606 +1,436 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { FormEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type Project = { project_id: string; title: string; genre: string; creative_brief: string; length_category: string; target_words: number; word_tolerance: number; stage: string; status: string; provider: string; model_name: string; provider_status: string; provider_ready: boolean; updated_at: string };
-type Provider = { provider_id: string; display_name: string; provider_type: "real" | "simulation"; ready: boolean; status: "checking" | "connected" | "unavailable" | "test_required" | "error"; safe_message: string; model_name: string; real_test_passed: boolean };
-type Monitor = {
-  project: Project;
-  current_status: string;
-  active: boolean;
-  run_status?: { current_agent?: string; current_task?: string; estimated_finish?: string };
-  runs?: { run_id: string; stage?: string; status?: string; error_summary?: string | null }[];
-  events: { step?: string }[];
+type Project = {
+  project_id: string; title: string; genre: string; creative_brief: string; length_category: string;
+  target_words: number; stage: string; status: string; provider: string; model_name: string;
+  provider_status: string; provider_ready: boolean; updated_at: string;
 };
-type Message = { id: string; role: string; content: string; kind?: string };
-type Artifact = { artifact_id: string; name: string; category: string; format: string; size_bytes: number; created_at: string; status: string; can_preview: boolean; can_open: boolean; can_download: boolean; can_open_folder: boolean };
+type Provider = { provider_id: string; display_name: string; provider_type: "real" | "simulation"; ready: boolean; safe_message: string; model_name: string };
+type Vitals = {
+  temperature: number; phase: string; agent_id: string; agent_name: string; task: string;
+  recent_action: string; next_step: string; reading: string[]; progress_percent: number;
+  eta: string; eta_kind: string; model: string; provider: string; provider_ready: boolean;
+};
+type HistoryNode = { label: string; status: "completed" | "active" | "waiting" };
+type Monitor = {
+  project: Project; current_status: string; active: boolean;
+  run_status?: { current_agent?: string; current_task?: string; progress?: { completed?: number; total?: number }; checkpoint?: string };
+  vitals: Vitals; history_nodes: HistoryNode[]; outline_gate: { approved: boolean; message: string };
+};
+type MessageMetadata = { status?: string; summary?: string; impact?: string[]; actions?: string[] };
+type Message = { id: string; role: string; content: string; kind?: string; created_at?: string; metadata?: MessageMetadata };
+type Artifact = {
+  artifact_id: string; name: string; category: string; format: string; size_bytes: number; status: string;
+  approval_status?: "approved" | "waiting" | "required"; can_preview: boolean; can_open: boolean; can_download: boolean;
+};
 type ArtifactPreview = { name: string; format: string; content: string };
-type FolderResult = { selected: boolean; cancelled?: boolean; display_path?: string };
-type OutputConfig = { mode: "local" | "public"; isLocal: boolean; canOpenLocalDirectory: boolean; displayPath?: string | null };
+type ContextMenu = { project: Project; x: number; y: number } | null;
+
+const lengthOptions = [
+  { id: "SHORT", label: "短篇", range: "1,000–20,000 字", target: 12000, storyForm: "SHORT" },
+  { id: "MEDIUM", label: "中篇", range: "20,000–100,000 字", target: 60000, storyForm: "LONG" },
+  { id: "LONG", label: "长篇", range: "150,000–500,000 字", target: 300000, storyForm: "LONG" },
+  { id: "ULTRA", label: "超长篇", range: "500,000 字以上", target: 600000, storyForm: "LONG" },
+] as const;
+
+const phaseLabels: Record<string, string> = {
+  INTAKE: "等待开始", ROUTED: "路线确认", PLANNING: "策划中", REPLAN: "需要重新规划",
+  OUTLINE_REQUIRED: "需要重新规划", SUMMARY_READY: "等待大纲审批", APPROVED: "准备写作",
+  PRODUCING: "正文生成", PAUSED: "已暂停", FINAL_AUDIT: "最终质检", REPAIRING: "修订中",
+  MANUSCRIPT_READY: "正文完成", DELIVERED: "已完成", FAILED: "遇到问题",
+};
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/novel/${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...init?.headers }
+    headers: { "content-type": "application/json", ...init?.headers },
+    cache: "no-store",
   });
-  const data = await response.json();
-  if (!response.ok) throw Error(data.message || "操作失败");
-  return data;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "操作没有完成，请稍后重试。");
+  return data as T;
 }
 
-const stages = ["项目创建", "需求理解", "故事构思", "世界观与人物设计", "大纲生成", "等待大纲审批", "章节规划", "正文写作", "编辑修订", "质量检查", "Word 导出", "完成交付"];
-const lengthOptions = [
-  { id: "SHORT", label: "短篇", range: "1,000–20,000 字", target: 10000 },
-  { id: "MEDIUM", label: "中篇", range: "20,000–100,000 字", target: 60000 },
-  { id: "LONG", label: "长篇", range: "150,000–500,000 字", target: 300000 },
-  { id: "ULTRA", label: "超长篇", range: "500,000 字以上", target: 600000 }
-];
-
-const stageIndex: Record<string, number> = {
-  INTAKE: 0,
-  NEEDS_INPUT: 1,
-  ROUTED: 2,
-  PLANNING: 3,
-  REPLAN: 3,
-  SUMMARY_READY: 5,
-  APPROVED: 6,
-  PRODUCING: 7,
-  PAUSED: 7,
-  FINAL_AUDIT: 9,
-  REPAIRING: 8,
-  MANUSCRIPT_READY: 10,
-  DELIVERED: 11,
-  FAILED: 0
-};
-
-function stageLabel(stage: string, currentStatus?: string) {
-  if (stage === "PLANNING" && currentStatus === "WAITING_APPROVAL") return "等待大纲审批";
-  return stages[stageIndex[stage] ?? 0];
+function projectStatus(project: Project) {
+  if (!project.provider_ready && project.provider !== "fake") return "模型未连接";
+  return phaseLabels[project.stage] || "准备中";
 }
 
-function translateIssueSummary(raw: string) {
-  const text = raw.trim();
-  if (!text) return "当前流程中断，但系统没有返回更具体的问题说明。";
-  if (text.includes("request timed out") || text.includes("stream disconnected")) {
-    return "真实模型连接超时：工作室已经发起了 Codex 请求，但与模型服务的网络通信反复超时，所以卡在这一环节。";
+function fileLabel(artifact: Artifact) {
+  if (artifact.approval_status === "approved") return "已批准";
+  if (artifact.approval_status === "waiting") return "等待审批";
+  if (artifact.approval_status === "required") return "需要重新生成";
+  if (artifact.category === "final") return "最终作品";
+  if (artifact.category === "draft") return "创作草稿";
+  return "已生成";
+}
+
+function previewText(file: ArtifactPreview) {
+  const raw = file.content.trim();
+  if (!raw.startsWith("{") && !raw.startsWith("[")) return raw;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const body = parsed.content ?? parsed.text ?? parsed.body ?? parsed.markdown;
+    if (typeof body !== "string") return raw;
+    const title = parsed.title ?? parsed.chapter_title ?? parsed.scene_title;
+    return typeof title === "string" && title.trim() ? `${title.trim()}\n\n${body}` : body;
+  } catch {
+    return raw;
   }
-  if (text.includes("falling back to HTTP")) {
-    return "实时连接不稳定：系统先尝试实时通道，失败后切换到普通网络请求，但这一轮仍然没顺利完成。";
-  }
-  if (text.includes("Invalid schema") || text.includes("invalid_json_schema")) {
-    return "模型输出格式不符合系统要求：这一环节收到的返回结构不合法，系统因此中止。";
-  }
-  if (text.includes("timed out")) {
-    return "这一环节执行超时：系统等待模型或任务结果太久，没有在规定时间内完成。";
-  }
-  if (text.includes("non-zero exit code")) {
-    return "模型进程异常退出：Codex 已经启动，但这一步没有正常返回结果。";
-  }
-  if (text.includes("WAITING_APPROVAL")) {
-    return "当前没有报错，流程停在等待你审批大纲。";
-  }
-  return `环节异常：${text.slice(0, 140)}${text.length > 140 ? "…" : ""}`;
 }
 
 export default function Studio() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
-  const [projectLoading, setProjectLoading] = useState(false);
-  const [projectLoadError, setProjectLoadError] = useState<string | null>(null);
-  const [outputCount, setOutputCount] = useState<number | null>(null);
-  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
-  const [artifactsLoading, setArtifactsLoading] = useState(false);
-  const [artifactsError, setArtifactsError] = useState<string | null>(null);
-  const [previewArtifact, setPreviewArtifact] = useState<ArtifactPreview | null>(null);
-  const [artifactBusy, setArtifactBusy] = useState<string | null>(null);
   const [monitor, setMonitor] = useState<Monitor | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState("");
-  const [modal, setModal] = useState(false);
-  const [title, setTitle] = useState("");
-  const [outline, setOutline] = useState("");
-  const [length, setLength] = useState("SHORT");
-  const [provider, setProvider] = useState("");
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(false);
-  const [providersError, setProvidersError] = useState<string | null>(null);
-  const [settingsModal, setSettingsModal] = useState(false);
-  const [settingsDraft, setSettingsDraft] = useState<Project | null>(null);
-  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [note, setNote] = useState("准备就绪");
-  const [outputBusy, setOutputBusy] = useState(false);
-  const [outputConfig, setOutputConfig] = useState<OutputConfig | null>(null);
-  const [localhost, setLocalhost] = useState(false);
-  const [failureDialog, setFailureDialog] = useState<{ runId: string; summary: string } | null>(null);
-  const seenFailureRuns = useRef(new Set<string>());
+  const [title, setTitle] = useState("");
+  const [genre, setGenre] = useState("");
+  const [inspiration, setInspiration] = useState("");
+  const [length, setLength] = useState<(typeof lengthOptions)[number]["id"]>("SHORT");
+  const [selectedProvider, setSelectedProvider] = useState("codex");
+  const [preview, setPreview] = useState<ArtifactPreview | null>(null);
+  const [fileBusy, setFileBusy] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
+  const fileSection = useRef<HTMLDivElement>(null);
 
-  const openProject = useCallback(async (id: string, updateUrl = true) => {
-    setActiveProjectId(id);
-    setActiveProject(null);
-    setMonitor(null);
-    setMessages([]);
-    setOutputCount(null);
-    setArtifacts([]); setArtifactsLoading(true); setArtifactsError(null); setPreviewArtifact(null);
-    setProjectLoadError(null);
-    setProjectLoading(true);
-    if (updateUrl) window.history.pushState({ projectId: id }, "", `/novel-studio?project=${encodeURIComponent(id)}`);
+  const loadProjects = useCallback(async () => {
+    const rows = await api<Project[]>("projects");
+    setProjects(rows);
+    return rows;
+  }, []);
+
+  const loadProject = useCallback(async (id: string, quiet = false, updateUrl = false) => {
+    if (!quiet) setLoading(true);
     try {
-      const [detail, monitorData, messageList, outputFiles] = await Promise.all([
-        api<Project>(`projects/${id}`),
-        api<Monitor>(`projects/${id}/monitor`),
-        api<Message[]>(`projects/${id}/messages`),
-        api<unknown[]>(`outputs?projectId=${encodeURIComponent(id)}`)
+      const [detail, monitorData, messageRows, artifactData] = await Promise.all([
+        api<Project>(`projects/${id}`), api<Monitor>(`projects/${id}/monitor`),
+        api<Message[]>(`projects/${id}/messages`), api<{ items: Artifact[] }>(`projects/${id}/artifacts`),
       ]);
+      setActiveProjectId(id);
       setActiveProject(detail);
       setMonitor(monitorData);
-      setMessages(messageList);
-      setOutputCount(outputFiles.length);
-      try {
-        const artifactData = await api<{ items: Artifact[] }>(`projects/${id}/artifacts`);
-        setArtifacts(artifactData.items);
-        setOutputCount(artifactData.items.length);
-      } catch (error) {
-        setArtifactsError(error instanceof Error ? error.message : "作品文件加载失败，请重试。");
-      }
+      setMessages(messageRows.filter((item) => item.role === "user" || item.kind === "model_update"));
+      setArtifacts(artifactData.items);
+      setProjects((current) => current.map((item) => item.project_id === detail.project_id ? detail : item));
+      if (updateUrl) window.history.pushState({ projectId: id }, "", `${window.location.pathname}?project=${encodeURIComponent(id)}`);
+      setNotice("");
     } catch (error) {
-      setProjectLoadError(error instanceof Error ? error.message : "项目加载失败");
-      setNote(error instanceof Error ? error.message : "连接失败");
+      setNotice(error instanceof Error ? error.message : "项目加载失败。");
+    } finally {
+      if (!quiet) setLoading(false);
     }
-    setProjectLoading(false);
-    setArtifactsLoading(false);
   }, []);
 
   useEffect(() => {
     void (async () => {
       try {
-        const projectList = await api<Project[]>("projects");
-        setProjects(projectList);
-        const requestedId = new URLSearchParams(window.location.search).get("project");
-        const initialId = requestedId ?? projectList[0]?.project_id;
-        if (initialId) await openProject(initialId, !requestedId);
+        const [rows, providerRows] = await Promise.all([loadProjects(), api<Provider[]>("providers")]);
+        setProviders(providerRows);
+        const ready = providerRows.find((item) => item.ready && item.provider_type === "real") || providerRows.find((item) => item.ready);
+        if (ready) setSelectedProvider(ready.provider_id);
+        const requested = new URLSearchParams(window.location.search).get("project");
+        const first = requested || rows[0]?.project_id;
+        if (first) await loadProject(first, false, !requested);
+        else setLoading(false);
       } catch (error) {
-        setProjectLoadError(error instanceof Error ? error.message : "项目列表加载失败");
+        setNotice(error instanceof Error ? error.message : "作品库加载失败。");
+        setLoading(false);
       }
     })();
-    const restoreFromUrl = () => {
-      const projectId = new URLSearchParams(window.location.search).get("project");
-      if (projectId) void openProject(projectId, false);
-    };
-    window.addEventListener("popstate", restoreFromUrl);
-    return () => window.removeEventListener("popstate", restoreFromUrl);
-  }, [openProject]);
-  useEffect(() => {
-    setLocalhost(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
-    void api<OutputConfig>("outputs/config").then(setOutputConfig).catch(() => setOutputConfig(null));
-  }, []);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setModal(false); };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, []);
-
-  const stage = monitor?.project.stage || "INTAKE";
-  const currentStatus = monitor?.current_status || monitor?.run_status?.current_task || "";
-  const latestRun = monitor?.runs?.[0];
-  const hasFailure = currentStatus === "FAILED" || latestRun?.status === "FAILED" || stage === "FAILED";
-  const index = hasFailure ? Math.max(stageIndex[latestRun?.stage || stage] ?? 0, 0) : stage === "SUMMARY_READY" && currentStatus === "WAITING_APPROVAL" ? 5 : stageIndex[stage] ?? 0;
-  const projectTitle = activeProject?.title || "未选择项目";
-  const issueSummary = translateIssueSummary(latestRun?.error_summary || (hasFailure ? "当前流程在这个环节中断，但后端没有返回更具体的错误摘要。" : ""));
-  const visibleMessages = messages.filter((message) => message.role === "user" || message.kind === "model_update");
-  const runNoticeCount = messages.filter((message) => ["run_status", "error", "approval_request"].includes(message.kind || "")).length;
+  }, [loadProject, loadProjects]);
 
   useEffect(() => {
-    if (!hasFailure || !latestRun?.run_id || seenFailureRuns.current.has(latestRun.run_id)) return;
-    seenFailureRuns.current.add(latestRun.run_id);
-    setFailureDialog({ runId: latestRun.run_id, summary: issueSummary });
-  }, [hasFailure, issueSummary, latestRun?.run_id]);
+    if (!activeProjectId) return;
+    const timer = window.setInterval(() => void loadProject(activeProjectId, true), monitor?.active ? 3000 : 10000);
+    return () => window.clearInterval(timer);
+  }, [activeProjectId, loadProject, monitor?.active]);
+
+  useEffect(() => {
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, []);
+
+  const selectedLength = lengthOptions.find((item) => item.id === length) || lengthOptions[0];
+  const provider = providers.find((item) => item.provider_id === activeProject?.provider);
+  const vitals = monitor?.vitals;
 
   const primaryAction = useMemo(() => {
-    if (!activeProjectId || stage === "DELIVERED") return null;
-    if (stage === "PRODUCING") return { label: "暂停创作", path: "pause", tone: "secondary" };
-    if (stage === "PAUSED") return { label: "继续创作", path: "resume", tone: "primary" };
-    if (stage === "SUMMARY_READY") return { label: "批准大纲，进入正文", path: "outline/approve", tone: "primary" };
-    if (stage === "APPROVED") return { label: "开始正文生产", path: "start", tone: "primary" };
-    if (stage === "FAILED") return { label: "重新启动生产", path: "start", tone: "primary" };
+    const phase = vitals?.phase || activeProject?.stage;
+    if (!activeProjectId || phase === "DELIVERED" || phase === "MANUSCRIPT_READY") return null;
+    if (phase === "PRODUCING") return { label: "暂停创作", path: "pause", tone: "quiet" };
+    if (phase === "PAUSED") return { label: "继续创作", path: "resume", tone: "primary" };
+    if (phase === "SUMMARY_READY") return { label: "批准大纲并继续", path: "outline/approve", tone: "primary" };
+    if (phase === "REPLAN" || phase === "OUTLINE_REQUIRED") return { label: "重新规划", path: "start", tone: "primary" };
+    if (phase === "APPROVED") return { label: "开始写正文", path: "start", tone: "primary" };
     return { label: "开始构思", path: "start", tone: "primary" };
-  }, [activeProjectId, stage]);
+  }, [activeProject?.stage, activeProjectId, vitals?.phase]);
 
-  const showLocalOutput = Boolean(localhost && outputConfig?.canOpenLocalDirectory);
-
-  async function openOutputLibrary() {
-    setOutputBusy(true);
-    setNote("正在打开输出目录。");
+  async function runAction(path: string) {
+    if (!activeProjectId) return;
+    setActionBusy(true);
     try {
-      const item = await api<FolderResult>("system/output-folder", { method: "POST", body: JSON.stringify({ open: true }) });
-      if (item.display_path) {
-        setNote(`输出目录已打开：${item.display_path}`);
-      }
+      await api(`projects/${activeProjectId}/${path}`, { method: "POST", body: "{}" });
+      await loadProject(activeProjectId, false);
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "无法打开输出目录");
+      setNotice(error instanceof Error ? error.message : "操作没有完成。");
     } finally {
-      setOutputBusy(false);
+      setActionBusy(false);
     }
   }
 
-  const loadProviders = useCallback(async () => {
-    setProvidersLoading(true);
-    setProvidersError(null);
-    try {
-      const rows = await api<Provider[]>("providers");
-      setProviders(rows.map((row) => ({ ...row, provider_id: row.provider_id || (row as unknown as { provider_name: string }).provider_name })));
-    } catch (error) {
-      setProvidersError(error instanceof Error ? error.message : "模型状态加载失败，请重试。");
-    } finally {
-      setProvidersLoading(false);
-    }
-  }, []);
-
-  function openCreateModal() {
-    setProvider("");
-    setModal(true);
-    void loadProviders();
-  }
-
-  function openProjectSettings() {
-    if (!activeProject) return;
-    setSettingsDraft({ ...activeProject });
-    setSettingsModal(true);
-    void loadProviders();
-  }
-
-  async function saveProjectSettings(event: FormEvent) {
+  async function sendMessage(event: FormEvent) {
     event.preventDefault();
-    if (!activeProjectId || !settingsDraft) return;
-    if (settingsDraft.target_words !== activeProject?.target_words && !["INTAKE", "NEEDS_INPUT"].includes(activeProject?.stage || "") && !window.confirm("目标字数已变化，现有大纲不会自动重写。是否仅保存新的项目设置？")) return;
-    setSettingsSaving(true);
+    if (!activeProjectId || !input.trim()) return;
+    setSending(true);
     try {
-      const updated = await api<Project>(`projects/${activeProjectId}`, { method: "PATCH", body: JSON.stringify({ name: settingsDraft.title, genre: settingsDraft.genre, creative_brief: settingsDraft.creative_brief, length_category: settingsDraft.length_category, target_words: Number(settingsDraft.target_words), word_tolerance: settingsDraft.word_tolerance, provider: settingsDraft.provider, model_name: settingsDraft.model_name }) });
-      setSettingsModal(false);
-      setProjects((rows) => rows.map((row) => row.project_id === updated.project_id ? updated : row));
-      await openProject(updated.project_id, false);
-      setNote("项目设置已保存");
+      await api(`projects/${activeProjectId}/chat`, { method: "POST", body: JSON.stringify({ content: input.trim() }) });
+      setInput("");
+      await loadProject(activeProjectId, true);
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "项目设置保存失败");
+      setNotice(error instanceof Error ? error.message : "消息发送失败。");
     } finally {
-      setSettingsSaving(false);
+      setSending(false);
     }
   }
 
-  async function create(event: FormEvent) {
+  async function removeMessage(message: Message) {
+    if (!activeProjectId || !window.confirm("删除这条聊天记录？")) return;
+    await api(`projects/${activeProjectId}/messages/${encodeURIComponent(message.id)}`, { method: "DELETE" });
+    await loadProject(activeProjectId, true);
+  }
+
+  async function createProject(event: FormEvent) {
     event.preventDefault();
-    if (!title.trim()) return setNote("请填写小说标题。");
-    const preset = lengthOptions.find((item) => item.id === length)!;
-    const chosenProvider = providers.find((item) => item.provider_id === provider);
-    if (!chosenProvider) return setNote("请主动选择一个可用模型。");
-    if (!chosenProvider.ready) return setNote("所选模型尚未连接，请先完成模型检测。");
+    if (!title.trim() || !genre.trim()) return setNotice("请填写小说名称和题材。");
+    const chosen = providers.find((item) => item.provider_id === selectedProvider);
+    if (!chosen?.ready) return setNotice("所选模型尚未连接。");
     setCreating(true);
     try {
-      const project = await api<Project>("projects", {
+      const created = await api<Project>("projects", {
         method: "POST",
         body: JSON.stringify({
-          title: title.trim(),
-          user_requirements: outline,
-          genre: "自由创作",
-          target_length: preset.target,
-          story_form: length === "SHORT" ? "SHORT" : "LONG",
-          length_category: length,
-          creative_brief: outline,
-          provider_name: provider
-        })
+          title: title.trim(), genre: genre.trim(), user_requirements: inspiration.trim(), creative_brief: inspiration.trim(),
+          target_length: selectedLength.target, story_form: selectedLength.storyForm, length_category: length,
+          provider_name: selectedProvider, model_name: chosen.model_name,
+        }),
       });
-      setModal(false);
-      setTitle("");
-      setOutline("");
-      const nextProjects = await api<Project[]>("projects");
-      setProjects(nextProjects);
-      await openProject(project.project_id);
-      setNote("项目已创建，等待你从右侧开始构思。");
+      setCreateOpen(false); setTitle(""); setGenre(""); setInspiration("");
+      await loadProjects();
+      await loadProject(created.project_id, false, true);
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "创建失败");
+      setNotice(error instanceof Error ? error.message : "小说创建失败。");
     } finally {
       setCreating(false);
     }
   }
 
-  async function chat(event: FormEvent) {
-    event.preventDefault();
-    if (!activeProjectId || !text.trim()) return;
-    try {
-      await api(`projects/${activeProjectId}/chat`, { method: "POST", body: JSON.stringify({ content: text }) });
-      setText("");
-      await openProject(activeProjectId, false);
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : "发送失败");
-    }
+  async function deleteProject(project: Project) {
+    setContextMenu(null);
+    if (!window.confirm(`将《${project.title}》移入回收站？`)) return;
+    await api(`projects/${project.project_id}`, { method: "DELETE", body: JSON.stringify({ confirmed: true, confirmation: "DELETE" }) });
+    const rows = await loadProjects();
+    const next = rows.find((item) => item.project_id !== project.project_id);
+    if (next) await loadProject(next.project_id, false, true);
+    else { setActiveProjectId(null); setActiveProject(null); setMonitor(null); setMessages([]); setArtifacts([]); }
   }
 
-  async function removeMessage(message: Message) {
+  function openContext(event: MouseEvent, project: Project) {
+    event.preventDefault(); event.stopPropagation();
+    setContextMenu({ project, x: Math.min(event.clientX, window.innerWidth - 210), y: Math.min(event.clientY, window.innerHeight - 230) });
+  }
+
+  async function openFile(artifact: Artifact) {
     if (!activeProjectId) return;
-    if (!window.confirm("确认删除这条聊天记录吗？")) return;
+    setFileBusy(`${artifact.artifact_id}:open`);
     try {
-      await api(`projects/${activeProjectId}/messages/${encodeURIComponent(message.id)}`, { method: "DELETE" });
-      await openProject(activeProjectId, false);
-      setNote("聊天记录已删除");
+      await api(`projects/${activeProjectId}/artifacts/${artifact.artifact_id}/open`, { method: "POST", body: "{}" });
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "删除聊天记录失败");
-    }
+      setNotice(error instanceof Error ? error.message : "文件无法打开。");
+    } finally { setFileBusy(null); }
   }
 
-  async function clearRunNotices() {
-    if (!activeProjectId || !runNoticeCount) return;
-    try {
-      const result = await api<{ deleted: number }>(`projects/${activeProjectId}/messages/run-notices`, { method: "DELETE", body: "{}" });
-      await openProject(activeProjectId, false);
-      setNote(`已清理 ${result.deleted} 条旧运行提示。`);
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : "清理运行提示失败");
-    }
-  }
-
-  async function action(path: string) {
+  async function previewFile(artifact: Artifact) {
     if (!activeProjectId) return;
-    try {
-      await api(`projects/${activeProjectId}/${path}`, { method: "POST", body: "{}" });
-      await openProject(activeProjectId, false);
-    } catch (error) {
-      const summary = error instanceof Error ? error.message : "操作失败";
-      setFailureDialog({ runId: `action-${Date.now()}`, summary: translateIssueSummary(summary) });
-      setNote(error instanceof Error ? error.message : "操作失败");
-    }
+    setFileBusy(`${artifact.artifact_id}:preview`);
+    try { setPreview(await api<ArtifactPreview>(`projects/${activeProjectId}/artifacts/${artifact.artifact_id}/preview`)); }
+    catch (error) { setNotice(error instanceof Error ? error.message : "文件预览失败。"); }
+    finally { setFileBusy(null); }
   }
 
-  const refreshArtifacts = useCallback(async () => {
+  async function deleteFile(artifact: Artifact) {
+    if (!activeProjectId || !window.confirm(`删除“${artifact.name}”？如果它属于大纲，正文会立即停止。`)) return;
+    setFileBusy(`${artifact.artifact_id}:delete`);
+    try {
+      await api(`projects/${activeProjectId}/artifacts/${artifact.artifact_id}`, { method: "DELETE" });
+      await loadProject(activeProjectId, false);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "文件删除失败。"); }
+    finally { setFileBusy(null); }
+  }
+
+  async function rejectOutline() {
     if (!activeProjectId) return;
-    setArtifacts([]);
-    setArtifactsLoading(true);
-    setArtifactsError(null);
-    try {
-      const data = await api<{ items: Artifact[] }>(`projects/${activeProjectId}/artifacts`);
-      setArtifacts(data.items);
-    } catch (error) {
-      setArtifactsError(error instanceof Error ? error.message : "作品文件加载失败，请重试。");
-    } finally {
-      setArtifactsLoading(false);
-    }
-  }, [activeProjectId]);
-
-  async function previewArtifactFile(artifact: Artifact) {
-    if (!activeProjectId) return;
-    setArtifactBusy(`${artifact.artifact_id}:preview`);
-    try {
-      const data = await api<ArtifactPreview>(`projects/${activeProjectId}/artifacts/${artifact.artifact_id}/preview`);
-      setPreviewArtifact(data);
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : "文件预览失败");
-    } finally {
-      setArtifactBusy(null);
-    }
+    const reason = window.prompt("告诉创作团队需要修改什么：");
+    if (!reason?.trim()) return;
+    await api(`projects/${activeProjectId}/outline/reject`, { method: "POST", body: JSON.stringify({ reason }) });
+    await loadProject(activeProjectId, false);
   }
 
-  async function artifactAction(artifact: Artifact, operation: "open" | "open-folder") {
-    if (!activeProjectId) return;
-    setArtifactBusy(`${artifact.artifact_id}:${operation}`);
-    try {
-      await api(`projects/${activeProjectId}/artifacts/${artifact.artifact_id}/${operation}`, { method: "POST", body: "{}" });
-      setNote(operation === "open" ? "已交给 Windows 默认程序打开文件。" : "已在资源管理器中定位文件。");
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : "文件操作失败");
-    } finally {
-      setArtifactBusy(null);
-    }
-  }
-
-  async function deleteArtifact(artifact: Artifact) {
-    if (!activeProjectId) return;
-    setArtifactBusy(`${artifact.artifact_id}:delete`);
-    try {
-      const analysis = await api<{ affected: string[]; message: string }>(`projects/${activeProjectId}/artifacts/${artifact.artifact_id}/dependencies`);
-      const affected = analysis.affected.length ? `\n\n会标记为需要更新：${analysis.affected.join("、")}` : "";
-      if (!window.confirm(`删除《${artifact.name}》？文件会移入项目回收目录，不会自动调用模型重新生成。${affected}`)) return;
-      await api(`projects/${activeProjectId}/artifacts/${artifact.artifact_id}`, { method: "DELETE", body: "{}" });
-      setNote("文件已移入项目回收目录；下游文件如有依赖会标记为需要更新。");
-      await refreshArtifacts();
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : "删除文件失败");
-    } finally {
-      setArtifactBusy(null);
-    }
-  }
-
-  function formatFileSize(size: number) {
-    return size < 1024 * 1024 ? `${Math.max(1, Math.ceil(size / 1024))} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`;
-  }
-
-  function artifactCategoryLabel(category: string) {
-    return ({ outline: "大纲与规划", world: "世界观与人物", manuscript: "正文与章节", editorial: "编辑与质检", final: "最终成品" } as Record<string, string>)[category] || "作品文件";
-  }
-
-  const artifactGroups = ["outline", "world", "manuscript", "editorial", "final"].map((category) => ({
-    category,
-    name: artifactCategoryLabel(category),
-    items: artifacts.filter((artifact) => artifact.category === category)
-  })).filter((group) => group.items.length > 0);
-
-  async function remove(project: Project) {
-    if (!window.confirm(`删除《${project.title}》？项目会进入回收站，可稍后恢复。`)) return;
-    try {
-      await api(`projects/${project.project_id}`, { method: "DELETE", body: JSON.stringify({ confirmed: true, confirmation: "DELETE" }) });
-      setNote("项目已移入回收站。");
-      const remaining = await api<Project[]>("projects");
-      setProjects(remaining);
-      if (activeProjectId === project.project_id) {
-        const nextProjectId = remaining[0]?.project_id ?? null;
-        if (nextProjectId) await openProject(nextProjectId);
-        else { setActiveProjectId(null); setActiveProject(null); setMonitor(null); setMessages([]); }
-      }
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : "删除失败");
-    }
+  function handleMessageAction(action: string) {
+    if (action === "重新规划") void runAction("outline/replan");
+    if (action === "继续生产") void runAction(vitals?.phase === "PAUSED" ? "resume" : "start");
   }
 
   return (
-    <>
-      <main className="studio">
-        <aside className="spaces">
-          <div className="brand">AI小说公司</div>
-          <button className="new" onClick={openCreateModal}>新建小说</button>
-          <p>小说项目</p>
+    <main className="studioShell">
+      <aside className="libraryPanel">
+        <div className="brandBlock"><span className="brandDot" />AI小说公司</div>
+        <button className="newNovelButton" onClick={() => setCreateOpen(true)}><span>＋</span> 新建小说</button>
+        <div className="sectionCaption">我的作品</div>
+        <div className="projectList">
           {projects.map((project) => (
-            <div className={project.project_id === activeProjectId ? "projectRow active" : "projectRow"} key={project.project_id}>
-              <button className="project" type="button" aria-current={project.project_id === activeProjectId ? "page" : undefined} onClick={() => void openProject(project.project_id)}>
-                <b>{project.title}</b>
-                <small>{project.stage}</small>
-              </button>
-              <button className="deleteProject" title="删除项目" onClick={() => void remove(project)}>×</button>
-            </div>
-          ))}
-          <div className="bottom">
-            <Link href="/novel-studio/outputs">输出文件</Link>
-            <Link href="/novel-studio/settings/models">模型连接</Link>
-            <Link href="/novel-studio/trash">回收站</Link>
-          </div>
-        </aside>
-
-        <section className="conversation">
-          <header>
-            <div>
-              <small className="currentProjectLabel">当前项目</small>
-              <h1>《{projectTitle}》</h1>
-              {activeProject && <small className="projectMeta">状态：{activeProject.status} · 模型：{activeProject.model_name} · 更新于：{new Date(activeProject.updated_at).toLocaleString()} · 产物：{outputCount ?? 0}</small>}
-              {activeProject && <small className="projectMeta">{activeProject.genre} · {activeProject.length_category === "short" ? "短篇" : activeProject.length_category === "medium" ? "中篇" : activeProject.length_category === "long" ? "长篇" : "自定义"} · 约 {Math.round(activeProject.target_words / 10000)} 万字 · 模型状态：{activeProject.provider_ready ? "已连接" : "当前不可用"}</small>}
-              <span>{monitor?.project.provider === "fake" ? "模拟模型（不会调用真实 AI）" : monitor?.project.provider || "选择模型"}</span>
-            </div>
-            {activeProject && <button type="button" className="compact" onClick={openProjectSettings}>项目设置</button>}
-          </header>
-          <div className="dialogue">
-            {projectLoading ? (
-              <div className="welcome"><h2>正在打开项目……</h2><p>正在加载项目详情、状态和产物摘要。</p></div>
-            ) : projectLoadError ? (
-              <div className="welcome projectLoadError"><h2>项目加载失败</h2><p>{projectLoadError}</p><button type="button" className="controlPrimary" onClick={() => activeProjectId && void openProject(activeProjectId, false)}>重试</button><button type="button" className="controlSecondary" onClick={() => { window.history.pushState({}, "", "/novel-studio"); setActiveProjectId(null); setActiveProject(null); setProjectLoadError(null); }}>返回小说项目</button></div>
-            ) : !activeProjectId ? (
-              <div className="welcome">
-                <h2>今天想写什么故事？</h2>
-                <p>点击左侧新建小说，提交标题和创作大纲。</p>
-              </div>
-            ) : visibleMessages.map((message) => (
-              <div className={message.role === "user" ? "messageRow user" : "messageRow ai"} key={message.id}>
-                <div className={message.role === "user" ? "bubble user" : "bubble ai"}>{message.content}</div>
-                <button className="deleteMessage" type="button" onClick={() => void removeMessage(message)}>删除</button>
-              </div>
-            ))}
-            <div className="hint">{note}</div>
-          </div>
-          {activeProjectId && !projectLoading && !projectLoadError && (
-            <section className="artifactSection" aria-label="作品文件">
-              <div className="artifactHeading"><div><h2>作品文件</h2><p>完成大纲、章节或导出后，文件会直接显示在这里。</p></div><button type="button" className="compact" onClick={() => void refreshArtifacts()} disabled={artifactsLoading}>刷新</button></div>
-              {artifactsLoading ? <p className="artifactEmpty">正在加载作品文件……</p> : artifactsError ? <div className="artifactEmpty"><p>{artifactsError}</p><button type="button" className="compact" onClick={() => void refreshArtifacts()}>重试</button></div> : artifactGroups.length === 0 ? <div className="artifactEmpty"><p>这个项目还没有生成作品文件。</p><small>完成大纲、章节或导出后，文件会直接显示在这里。</small></div> : artifactGroups.map((group) => <section className="artifactGroup" key={group.category}><h3>{group.name}</h3><div className="artifactGrid">{group.items.map((artifact) => <article className="artifactCard" key={artifact.artifact_id}><div className="artifactIcon">{artifact.format === "docx" ? "W" : artifact.format === "pdf" ? "P" : "文"}</div><div className="artifactInfo"><b>{artifact.name}</b><small>{artifact.format.toUpperCase()} · {formatFileSize(artifact.size_bytes)}</small><small>{artifactCategoryLabel(artifact.category)} · {new Date(artifact.created_at).toLocaleString()} · 已就绪</small></div><div className="artifactActions">{artifact.can_preview && <button type="button" className="compact" onClick={() => void previewArtifactFile(artifact)} disabled={artifactBusy === `${artifact.artifact_id}:preview`}>预览</button>}{artifact.can_open && <button type="button" className="compact" onClick={() => void artifactAction(artifact, "open")} disabled={artifactBusy === `${artifact.artifact_id}:open`}>打开</button>}{artifact.can_download && <a className="compact" href={`/api/novel/projects/${activeProjectId}/artifacts/${artifact.artifact_id}/download`}>下载</a>}{artifact.can_open_folder && <button type="button" className="compact" onClick={() => void artifactAction(artifact, "open-folder")} disabled={artifactBusy === `${artifact.artifact_id}:open-folder`}>打开文件夹</button>}<button type="button" className="compact danger" onClick={() => void deleteArtifact(artifact)} disabled={artifactBusy === `${artifact.artifact_id}:delete`}>删除</button></div></article>)}</div></section>)}
-            </section>
-          )}
-          {activeProjectId && !projectLoading && !projectLoadError && (
-            <form className="composer" onSubmit={chat}>
-              <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="补充修改意见或新的创作方向；将发送给当前项目…" />
-              <button>发送指导</button>
-            </form>
-          )}
-          {activeProjectId && !projectLoading && !projectLoadError && runNoticeCount > 0 && (
-            <button className="clearRunNotices" type="button" onClick={() => void clearRunNotices()}>
-              清理 {runNoticeCount} 条旧运行提示
+            <button
+              key={project.project_id}
+              className={`projectCard ${activeProjectId === project.project_id ? "selected" : ""}`}
+              onClick={() => void loadProject(project.project_id, false, true)}
+              onContextMenu={(event) => openContext(event, project)}
+            >
+              <span className="bookGlyph">文</span>
+              <span className="projectCopy"><strong>《{project.title}》</strong><small><i className={`statusDot ${project.stage === "FAILED" ? "danger" : ""}`} />{projectStatus(project)}</small></span>
+              <span className="moreButton" onClick={(event) => openContext(event, project)}>•••</span>
             </button>
-          )}
-        </section>
+          ))}
+          {!projects.length && <p className="emptyHint">还没有作品。创建第一部小说后，创作团队会在这里等你。</p>}
+        </div>
+        <div className="libraryFooter"><span>作品自动保存在工作室</span><a href="/novel-studio/settings/models">模型设置</a></div>
+      </aside>
 
-        <aside className="production">
-          <h3>创作进度</h3>
-          <div className="meter">
-            {stages.map((item, itemIndex) => (
-              <div className={hasFailure && itemIndex === index ? "failed" : itemIndex < index ? "done" : itemIndex === index ? "current" : "future"} key={item}>
-                <i />
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-          <section className="task">
-            <b>{stageLabel(stage, monitor?.current_status)}</b>
-            <p>{hasFailure ? "该环节执行失败" : monitor?.run_status?.current_task || (monitor?.current_status === "WAITING_APPROVAL" ? "等待你审批大纲" : "等待开始")}</p>
-            <small>负责人：{monitor?.run_status?.current_agent || "PM"}</small>
-            <small>预计完成：{monitor?.run_status?.estimated_finish || "初步估算将在开始后给出"}</small>
-          </section>
-          {hasFailure && <section className="task issue"><b>问题概述</b><p>{issueSummary}</p></section>}
-          {primaryAction && (
-            <div className="controls">
-              <button className={primaryAction.tone === "primary" ? "controlPrimary" : "controlSecondary"} onClick={() => void action(primaryAction.path)}>
-                {primaryAction.label}
-              </button>
-            </div>
-          )}
-          {showLocalOutput ? (
-            <button className="outputOpen" onClick={() => void openOutputLibrary()} disabled={outputBusy}>{outputBusy ? "正在打开…" : "打开本机输出目录"}</button>
-          ) : (
-            <Link className="outputOpen" href="/novel-studio/outputs">进入输出文件</Link>
-          )}
-        </aside>
-      </main>
+      <section className="conversationPanel">
+        <header className="projectHeader">
+          <div><span>当前作品</span><h1>{activeProject ? `《${activeProject.title}》` : "AI 小说工作台"}</h1></div>
+          {activeProject && <button className="fileJump" onClick={() => fileSection.current?.scrollIntoView({ behavior: "smooth" })}>作品文件 <span>{artifacts.length}</span></button>}
+        </header>
 
-      {modal && (
-        <div className="overlay" onClick={() => setModal(false)}>
-          <form className="modal" onClick={(event) => event.stopPropagation()} onSubmit={create}>
-            <button className="close" type="button" onClick={() => setModal(false)}>×</button>
-            <h2>创建一部新小说</h2>
-            <label>项目标题 *</label>
-            <input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：合租屋里的夏天" />
-            <label>提交大纲 / 创作灵感</label>
-            <textarea value={outline} onChange={(event) => setOutline(event.target.value)} placeholder="自由创作：人物、背景、冲突、章节构想或完整大纲都可以。后续创作将以此为主。" />
-            <label>小说体量</label>
-            <div className="lengthChoices">
-              {lengthOptions.map((item) => (
-                <button type="button" className={length === item.id ? "length selected" : "length"} key={item.id} onClick={() => setLength(item.id)}>
-                  <b>{item.label}</b>
-                  <small>{item.range}</small>
-                </button>
+        {notice && <div className="noticeBar"><span>{notice}</span><button onClick={() => setNotice("")}>×</button></div>}
+
+        {!activeProjectId && !loading ? (
+          <div className="welcomeState"><div className="welcomeMark">AI</div><h2>把一个念头交给创作团队</h2><p>创建小说后，项目经理会组织世界观、角色、剧情、写作、编辑与质检员工协作完成作品。</p><button onClick={() => setCreateOpen(true)}>创建第一部小说</button></div>
+        ) : loading ? (
+          <div className="loadingState"><span /><p>正在打开作品…</p></div>
+        ) : (
+          <>
+            <div className="chatStream">
+              {!messages.length && <div className="assistantIntro"><div className="assistantAvatar">AI</div><div><strong>创作团队已就位</strong><p>你可以补充灵感、修改人物或直接开始构思。每个阶段的真实进度会显示在右侧。</p></div></div>}
+              {messages.map((message) => (
+                <article className={`messageRow ${message.role === "user" ? "user" : "assistant"}`} key={message.id}>
+                  {message.role !== "user" && <div className="assistantAvatar small">AI</div>}
+                  <div className="messageBubble">
+                    <div className="messageTop"><strong>{message.role === "user" ? "你" : "AI小说公司"}</strong><button onClick={() => void removeMessage(message)} aria-label="删除消息">删除</button></div>
+                    <p>{message.content}</p>
+                    {message.metadata?.impact && <div className="impactCard"><span>这次修改可能影响</span>{message.metadata.impact.map((item) => <div key={item}>✓ {item}</div>)}<div className="impactActions">{message.metadata.actions?.map((item) => <button key={item} onClick={() => handleMessageAction(item)}>{item}</button>)}</div></div>}
+                  </div>
+                </article>
               ))}
+              {monitor?.active && <div className="workingLine"><span className="workingPulse" /><div><strong>{vitals?.agent_name}正在工作</strong><small>{vitals?.task}</small></div></div>}
             </div>
-            <small>系统按区间规划，不要求你填写一个不现实的精确字数。</small>
-            <small>成品会自动保存到后端输出目录，可在右侧工作台直接打开预览。</small>
-            <label>选择模型</label>
-            {providersLoading ? <p className="providerLoading">正在检测模型……</p> : providersError ? <p className="providerLoading">{providersError} <button type="button" className="compact" onClick={() => void loadProviders()}>重试</button></p> : <><small className="providerLoading">当前可用真实模型：{providers.filter((item) => item.provider_type === "real" && item.ready).length} 个</small><div className="providerCards">{providers.map((item) => <div className={`providerCard ${provider === item.provider_id ? "selected" : ""} ${item.ready ? "" : "disabled"}`} key={item.provider_id} onClick={() => item.ready && setProvider(item.provider_id)} role={item.ready ? "button" : undefined} tabIndex={item.ready ? 0 : -1}><b>{item.display_name}</b><small>{item.status === "connected" ? "已连接" : item.status === "test_required" ? "需要连接测试" : item.status === "error" ? "连接异常" : item.status === "checking" ? "正在检测" : "未连接"}</small><small>{item.safe_message}</small>{!item.ready && item.provider_type === "real" && <Link className="compact" href="/novel-studio/settings/models" onClick={(event) => event.stopPropagation()}>{item.status === "test_required" || item.status === "error" ? "重新检测" : "去连接"}</Link>}{item.provider_type === "simulation" && <small>模拟模型，不会调用真实 AI。</small>}</div>)}</div>{providers.filter((item) => item.provider_type === "real" && item.ready).length === 0 && <p className="providerLoading">当前没有已连接的真实模型。你可以前往模型连接，或主动选择模拟模式测试流程。</p>}</>}
-            {creating && <small aria-live="polite">创建中…</small>}
-            <button className="create">创建小说项目</button>
-          </form>
-        </div>
-      )}
 
-      {settingsModal && settingsDraft && (
-        <div className="overlay" onClick={() => setSettingsModal(false)}>
-          <form className="modal settingsModal" onClick={(event) => event.stopPropagation()} onSubmit={saveProjectSettings}>
-            <button className="close" type="button" onClick={() => setSettingsModal(false)}>×</button>
-            <h2>项目设置</h2>
-            <label>项目名称<input required value={settingsDraft.title} onChange={(event) => setSettingsDraft({ ...settingsDraft, title: event.target.value })} /></label>
-            <label>题材<input required value={settingsDraft.genre} onChange={(event) => setSettingsDraft({ ...settingsDraft, genre: event.target.value })} /></label>
-            <label>大概构思<textarea value={settingsDraft.creative_brief || ""} onChange={(event) => setSettingsDraft({ ...settingsDraft, creative_brief: event.target.value })} /></label>
-            <label>小说体量<select value={settingsDraft.length_category} onChange={(event) => setSettingsDraft({ ...settingsDraft, length_category: event.target.value })}><option value="short">短篇</option><option value="medium">中篇</option><option value="long">长篇</option><option value="custom">自定义</option></select></label>
-            <label>预期字数<input type="number" min="1000" max="2000000" required value={settingsDraft.target_words} onChange={(event) => setSettingsDraft({ ...settingsDraft, target_words: Number(event.target.value) })} /></label>
-            <small>预期字数用于控制后续故事规模，不要求最终字数完全一致。</small>
-            <label>项目模型</label>
-            <div className="providerCards">{providers.map((item) => <div className={`providerCard ${settingsDraft.provider === item.provider_id ? "selected" : ""} ${item.ready ? "" : "disabled"}`} key={item.provider_id} onClick={() => item.ready && setSettingsDraft({ ...settingsDraft, provider: item.provider_id, model_name: item.model_name })} role={item.ready ? "button" : undefined} tabIndex={item.ready ? 0 : -1}><b>{item.display_name}</b><small>{item.status === "connected" ? "已连接" : item.status === "test_required" ? "需要连接测试" : "未连接"}</small><small>{item.safe_message}</small>{!item.ready && item.provider_type === "real" && <Link className="compact" href="/novel-studio/settings/models" onClick={(event) => event.stopPropagation()}>{item.status === "test_required" ? "重新检测" : "去连接"}</Link>}</div>)}</div>
-            {activeProject && ["PRODUCING", "FINAL_AUDIT", "REPAIRING"].includes(activeProject.stage) && <p className="settingsWarning">项目正在运行，请先暂停，再更换模型。</p>}
-            <button className="create" disabled={settingsSaving}>{settingsSaving ? "保存中…" : "保存设置"}</button>
-          </form>
-        </div>
-      )}
+            <div className="composerDock">
+              <form className="composer" onSubmit={sendMessage}>
+                <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="告诉创作团队你想写什么，或需要修改什么…" rows={2} />
+                <div className="composerFooter"><span>AI只展示任务进度，不展示内部思考</span><button disabled={sending || !input.trim()}>{sending ? "发送中" : "发送"}</button></div>
+              </form>
+              {primaryAction && <button className={`primaryFlow ${primaryAction.tone}`} onClick={() => void runAction(primaryAction.path)} disabled={actionBusy}>{actionBusy ? "处理中…" : primaryAction.label}</button>}
+            </div>
 
-      {failureDialog && (
-        <div className="overlay failureOverlay" role="presentation" onClick={() => setFailureDialog(null)}>
-          <section className="failureDialog" role="alertdialog" aria-modal="true" aria-labelledby="failure-title" onClick={(event) => event.stopPropagation()}>
-            <h2 id="failure-title">运行未完成</h2>
-            <p>{failureDialog.summary}</p>
-            <button className="controlPrimary" type="button" onClick={() => setFailureDialog(null)}>我知道了</button>
+            <section className="filesSection" ref={fileSection}>
+              <div className="filesHeading"><div><span>作品文件</span><h2>创作成果</h2></div><p>无需查找目录，直接打开、预览或下载。</p></div>
+              <div className="fileGrid">
+                {artifacts.map((artifact) => (
+                  <article className="fileCard" key={artifact.artifact_id}>
+                    <div className={`fileIcon ${artifact.format}`}>▤</div>
+                    <div className="fileInfo"><strong>{artifact.name.replace(/^\d+_/, "")}</strong><small><i className={`fileState ${artifact.approval_status || "ready"}`} />{fileLabel(artifact)} · {Math.max(1, Math.round(artifact.size_bytes / 1024))} KB</small></div>
+                    <div className="fileActions">
+                      {artifact.can_preview && <button onClick={() => void previewFile(artifact)} disabled={fileBusy?.startsWith(artifact.artifact_id)}>预览</button>}
+                      {artifact.can_open && <button onClick={() => void openFile(artifact)} disabled={fileBusy?.startsWith(artifact.artifact_id)}>打开</button>}
+                      {artifact.can_download && <a href={`/api/novel/projects/${activeProjectId}/artifacts/${artifact.artifact_id}/download`}>下载</a>}
+                      {artifact.approval_status === "waiting" && <><button className="approve" onClick={() => void runAction("outline/approve")}>批准</button><button onClick={() => void rejectOutline()}>退回</button></>}
+                      <button className="deleteFile" onClick={() => void deleteFile(artifact)}>删除</button>
+                    </div>
+                  </article>
+                ))}
+                {!artifacts.length && <div className="emptyFiles"><span>▤</span><p>作品文件会随着构思和写作自动出现在这里。</p></div>}
+              </div>
+            </section>
+          </>
+        )}
+      </section>
+
+      <aside className="vitalsPanel">
+        <div className="vitalsTitle"><span>创作生命体征</span><i className={monitor?.active ? "live" : ""}>{monitor?.active ? "实时" : "待命"}</i></div>
+        {activeProject && vitals ? <>
+          <section className="temperatureCard">
+            <div className="thermometer"><div className="thermometerFill" style={{ height: `${Math.max(18, vitals.progress_percent)}%` }} /><b /></div>
+            <div className="temperatureCopy"><span>创作热度</span><strong>{vitals.temperature.toFixed(1)}<small>℃</small></strong><p>{phaseLabels[vitals.phase] || vitals.phase}</p></div>
           </section>
-        </div>
-      )}
-      {previewArtifact && <div className="overlay" onClick={() => setPreviewArtifact(null)}><section className="modal previewModal" onClick={(event) => event.stopPropagation()}><button className="close" type="button" onClick={() => setPreviewArtifact(null)}>×</button><h2>{previewArtifact.name}</h2><pre>{previewArtifact.content}</pre></section></div>}
-    </>
+
+          <section className="employeeCard">
+            <div className="cardEyebrow">当前AI员工</div>
+            <div className="employeeIdentity"><span>{vitals.agent_name.slice(0, 1)}</span><div><strong>{vitals.agent_name}</strong><small>{monitor.active ? "正在工作" : "当前负责人"}</small></div></div>
+            <dl><div><dt>当前任务</dt><dd>{vitals.task}</dd></div><div><dt>最近动作</dt><dd>{vitals.recent_action}</dd></div><div><dt>下一步</dt><dd>{vitals.next_step}</dd></div></dl>
+            <div className="readingList"><span>正在读取</span>{vitals.reading.map((item) => <small key={item}>✓ {item}</small>)}</div>
+          </section>
+
+          <section className="progressCard">
+            <div className="progressTop"><span>当前进度</span><strong>{vitals.progress_percent}%</strong></div>
+            <div className="progressTrack"><i style={{ width: `${vitals.progress_percent}%` }} /></div>
+            <div className="etaRow"><span>预计完成</span><strong>{vitals.eta}</strong></div>
+          </section>
+
+          <section className={`modelCard ${activeProject.provider === "fake" ? "fake" : ""}`}>
+            <div><span className="modelSignal" /><p><small>当前模型</small><strong>{activeProject.provider === "fake" ? "测试模式" : "Codex"}</strong></p></div>
+            <p>{activeProject.provider === "fake" ? "不会调用真实模型，也不会产生真实小说内容。" : activeProject.provider_ready ? "已连接 · 可用于真实创作" : provider?.safe_message || "模型尚未连接"}</p>
+          </section>
+
+          <section className="timelineCard">
+            <div className="cardEyebrow">历史节点</div>
+            <div className="timeline">{monitor.history_nodes.map((node) => <div className={node.status} key={node.label}><i>{node.status === "completed" ? "✓" : node.status === "active" ? "•" : ""}</i><span>{node.label}</span></div>)}</div>
+          </section>
+        </> : <div className="vitalsEmpty"><span>♡</span><p>打开一部作品后，这里会显示创作团队的真实状态。</p></div>}
+      </aside>
+
+      {contextMenu && <div className="contextMenu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
+        <button onClick={() => void loadProject(contextMenu.project.project_id, false, true)}>打开作品</button>
+        <button onClick={() => { setContextMenu(null); if (activeProjectId !== contextMenu.project.project_id) void loadProject(contextMenu.project.project_id, false, true).then(() => fileSection.current?.scrollIntoView()); else fileSection.current?.scrollIntoView({ behavior: "smooth" }); }}>打开文件</button>
+        <button onClick={() => { setContextMenu(null); if (contextMenu.project.stage === "PRODUCING") void runAction("pause"); }}>{contextMenu.project.stage === "PAUSED" ? "作品已暂停" : "暂停制作"}</button>
+        <button className="danger" onClick={() => void deleteProject(contextMenu.project)}>删除项目</button>
+      </div>}
+
+      {createOpen && <div className="modalBackdrop" onMouseDown={() => setCreateOpen(false)}><form className="createModal" onSubmit={createProject} onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="modalClose" onClick={() => setCreateOpen(false)}>×</button>
+        <div className="modalHeading"><span>NEW STORY</span><h2>创建新小说</h2><p>给创作团队一个起点，其余内容可以由AI自由构思。</p></div>
+        <label>小说名称<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：长安夜行录" autoFocus /></label>
+        <label>题材<input value={genre} onChange={(event) => setGenre(event.target.value)} placeholder="例如：古代江湖、都市情感、悬疑" /></label>
+        <fieldset><legend>作品体量</legend><div className="lengthCards">{lengthOptions.map((item) => <button type="button" className={length === item.id ? "selected" : ""} onClick={() => setLength(item.id)} key={item.id}><strong>{item.label}</strong><small>{item.range}</small></button>)}</div></fieldset>
+        <label>已有灵感 <small>可为空</small><textarea value={inspiration} onChange={(event) => setInspiration(event.target.value)} placeholder="人物、世界、情节或一句模糊的想法都可以。留空时由AI自由构思。" rows={4} /></label>
+        <div className="modelChoice"><span>创作模型</span><div>{providers.filter((item) => item.ready).map((item) => <button type="button" key={item.provider_id} className={selectedProvider === item.provider_id ? "selected" : ""} onClick={() => setSelectedProvider(item.provider_id)}><i />{item.provider_type === "simulation" ? "测试模式" : "Codex"}<small>{item.provider_type === "simulation" ? "不调用真实AI" : "已连接"}</small></button>)}</div></div>
+        <div className="outputNote"><span>⌂</span><div><strong>最终作品保存位置</strong><small>工作室默认输出库 · 创建后可在“作品文件”中直接打开</small></div></div>
+        <button className="createSubmit" disabled={creating}>{creating ? "正在创建…" : "创建项目"}</button>
+      </form></div>}
+
+      {preview && <div className="modalBackdrop" onMouseDown={() => setPreview(null)}><section className="previewModal" onMouseDown={(event) => event.stopPropagation()}><header><div><span>文件预览</span><h2>{preview.name}</h2></div><button onClick={() => setPreview(null)}>×</button></header><pre>{previewText(preview)}</pre></section></div>}
+    </main>
   );
 }
