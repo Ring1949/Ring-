@@ -14,17 +14,23 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   const { path } = await context.params;
   const url = `${origin}/api/${path.join("/")}${request.nextUrl.search}`;
   const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer();
+  const authToken = process.env.NOVEL_API_AUTH_TOKEN?.trim();
 
   try {
+    const upstreamHeaders = new Headers();
+    upstreamHeaders.set("content-type", request.headers.get("content-type") ?? "application/json");
+    if (authToken) upstreamHeaders.set("authorization", `Bearer ${authToken}`);
     const upstream = await fetch(url, {
       method: request.method,
-      headers: { "content-type": request.headers.get("content-type") ?? "application/json" },
+      headers: upstreamHeaders,
       body,
       cache: "no-store",
     });
 
     const headers = new Headers();
     headers.set("content-type", upstream.headers.get("content-type") ?? "application/json; charset=utf-8");
+    const disposition = upstream.headers.get("content-disposition");
+    if (disposition) headers.set("content-disposition", disposition);
     return new NextResponse(upstream.body, { status: upstream.status, headers });
   } catch {
     return NextResponse.json(
