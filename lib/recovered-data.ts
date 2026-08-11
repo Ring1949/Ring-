@@ -7,8 +7,3 @@ export function getRecoveredCategories() { return recoveredArchive.categories as
 export function getRecoveredProjects() { return recoveredArchive.projects as unknown as any[]; }
 export function getRecoveredMedia() { return recoveredArchive.media as unknown as any[]; }
 export function getRecoveredTags() { return recoveredArchive.tags as unknown as any[]; }
-export function getRecoveredInspirationConfig() {
-  const settings = getRecoveredSettings();
-  try { return { tree: JSON.parse(settings.inspiration_tree_json || "null"), assignments: JSON.parse(settings.inspiration_resource_map_json || "{}") }; }
-  catch { return { tree: null, assignments: {} }; }
-}

@@ -3,43 +3,64 @@ import { getSettings, now, replaceTagLinks, setSettings, slugify } from "@/lib/d
 import { getSupabaseServer, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
 import { bool, formValue, isAdmin, json, parseTagIds, requireAdmin } from "@/lib/utils";
 import { defaultCategories, isSupabaseConfigError } from "@/lib/fallback-data";
-import { parseInspirationResourceMap, parseInspirationTree } from "@/lib/inspiration";
 
 const toBool = (value: unknown) => bool(value) === 1;
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 
 function normalizeProject(project: any) {
   if (!project) return project;
+  const rawCategorySlug = project.categories?.slug || project.category_slug || "";
+  const product = rawCategorySlug === "product" || String(project.slug || "").startsWith("product-");
   return {
     ...project,
     is_featured: flag(project.is_featured),
     is_recommended: flag(project.is_recommended),
     is_series: flag(project.is_series),
-    category_name: project.categories?.name || project.category_name || "",
-    category_slug: project.categories?.slug || project.category_slug || ""
+    ...(product ? { collection_slug: "product" } : {}),
+    category_id: rawCategorySlug === "product" ? 1 : project.category_id,
+    category_name: rawCategorySlug === "product" ? "摄影" : project.categories?.name || project.category_name || "",
+    category_slug: rawCategorySlug === "product" ? "photo" : rawCategorySlug
   };
 }
 
 function normalizeMedia(media: any) {
   if (!media) return media;
+  const { show_in_inspiration: _removedChannelFlag, ...cleanMedia } = media;
+  const rawCategorySlug = media.categories?.slug || media.category_slug || "";
+  const projectSlug = media.projects?.slug || media.project_slug || "";
+  const product = rawCategorySlug === "product" || String(projectSlug).startsWith("product-");
   return {
-    ...media,
+    ...cleanMedia,
     is_hero: flag(media.is_hero),
     is_selected: flag(media.is_selected),
     is_cover: flag(media.is_cover),
     show_in_database: flag(media.show_in_database),
-    show_in_inspiration: flag(media.show_in_inspiration),
     project_title: media.projects?.title || media.project_title || "",
     project_slug: media.projects?.slug || media.project_slug || "",
     project_year: media.projects?.year || media.project_year || "",
     project_location: media.projects?.location || media.project_location || "",
-    category_name: media.categories?.name || media.category_name || "",
-    category_slug: media.categories?.slug || media.category_slug || ""
+    ...(product ? { collection_slug: "product" } : {}),
+    category_id: rawCategorySlug === "product" ? 1 : media.category_id,
+    category_name: rawCategorySlug === "product" ? "摄影" : media.categories?.name || media.category_name || "",
+    category_slug: rawCategorySlug === "product" ? "photo" : rawCategorySlug
   };
 }
 
 function normalizeCategory(category: any, projectCount = 0) {
   return { ...category, is_primary: flag(category.is_primary), project_count: projectCount };
+}
+
+async function canonicalCategoryId(value: unknown) {
+  const categoryId = Number(value) || null;
+  if (!categoryId) return null;
+  const supabase = getSupabaseServer();
+  const selected = await supabase.from("categories").select("id,slug").eq("id", categoryId).maybeSingle();
+  if (selected.error) throw selected.error;
+  if (selected.data?.slug !== "product") return categoryId;
+  const photo = await supabase.from("categories").select("id").eq("slug", "photo").maybeSingle();
+  if (photo.error) throw photo.error;
+  if (!photo.data) throw new Error("摄影分类不存在，请先在作品管理中创建摄影分类。");
+  return Number(photo.data.id);
 }
 
 function extensionFor(filename: string) {
@@ -164,34 +185,12 @@ function mediaPayloadFromSaved(saved: any, values: any, index = 0) {
     is_selected: toBool(values.is_selected),
     is_cover: mediaType === "image" ? toBool(values.is_cover) : false,
     show_in_database: toBool(values.show_in_database),
-    show_in_inspiration: toBool(values.show_in_inspiration),
     sort_order: (Number(values.sort_order) || 0) + index,
     created_at: now(),
     updated_at: now()
   };
 }
 
-/**
- * Inspiration assets are media rows; their channel placement is stored in the
- * Supabase-backed settings record. Saving both on the server prevents a slow
- * browser request from leaving a new asset without its selected node.
- */
-async function saveInspirationAssignments(mediaRows: any[], values: any) {
-  const channel = String(values.inspiration_channel ?? values.channel ?? "").trim();
-  const chapter = String(values.inspiration_chapter ?? values.chapter ?? "").trim();
-  if (!channel || !chapter || !mediaRows.length) return;
-
-  const settings = await getSettings();
-  const assignments = parseInspirationResourceMap(settings.inspiration_resource_map_json);
-  const title = String(values.title || "").trim();
-  const description = String(values.description || "").trim();
-  const sourceUrl = String(values.source_url || "").trim();
-  const tags = String(values.tags || "").trim();
-  mediaRows.forEach((item) => {
-    assignments[String(item.id)] = { channel, chapter, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(sourceUrl ? { source_url: sourceUrl } : {}), ...(tags ? { tags } : {}) };
-  });
-  await setSettings({ inspiration_resource_map_json: JSON.stringify(assignments) });
-}
 function storagePathFromPublicUrl(url: string) {
   if (!url) return "";
   const marker = `/storage/v1/object/public/${SUPABASE_MEDIA_BUCKET}/`;
@@ -285,13 +284,6 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
   if (route === "me") return json({ authenticated: isAdmin(request) });
 
   if (route === "settings") return json(await getSettings());
-  if (route === "inspiration-config") {
-    const settings = await getSettings();
-    return json({
-      tree: parseInspirationTree(settings.inspiration_tree_json),
-      assignments: parseInspirationResourceMap(settings.inspiration_resource_map_json)
-    });
-  }
   const supabase = getSupabaseServer();
 
   if (route === "categories") {
@@ -309,7 +301,17 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
       if (countError) throw countError;
       return normalizeCategory(category, count || 0);
     }));
-    return json(categories);
+    const product = categories.find((category: any) => category.slug === "product");
+    return json(categories
+      .filter((category: any) => category.slug !== "product")
+      .map((category: any) => category.slug === "photo"
+        ? {
+            ...category,
+            name: "摄影",
+            description: "人物、现场、城市、产品与观看方式。",
+            project_count: Number(category.project_count || 0) + Number(product?.project_count || 0)
+          }
+        : category));
   }
 
   if (route === "tags") {
@@ -350,16 +352,6 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
     return json(projects);
   }
 
-  if (route === "inspiration") {
-    const { data, error } = await supabase
-      .from("media")
-      .select("*, categories:category_id(name,slug)")
-      .eq("show_in_inspiration", true)
-      .order("sort_order", { ascending: true })
-      .order("id", { ascending: true });
-    if (error) throw error;
-    return json((data || []).map(normalizeMedia));
-  }
 
   if (route === "projects") {
     let query = supabase.from("projects").select("*, categories:category_id(name,slug)");
@@ -406,10 +398,12 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
     if (search.get("database") === "true") query = query.eq("show_in_database", true);
     if (search.get("category")) {
       const slug = search.get("category") === "3d" ? "three-d" : search.get("category");
-      const category = await supabase.from("categories").select("id").eq("slug", slug).maybeSingle();
-      if (category.error) throw category.error;
-      if (!category.data) return json([]);
-      query = query.eq("category_id", category.data.id);
+      const slugs = slug === "photo" ? ["photo", "product"] : [slug];
+      const categories = await supabase.from("categories").select("id").in("slug", slugs);
+      if (categories.error) throw categories.error;
+      const categoryIds = (categories.data || []).map((item: any) => item.id);
+      if (!categoryIds.length) return json([]);
+      query = query.in("category_id", categoryIds);
     }
     const { data, error } = await query.order("sort_order", { ascending: true }).order("id", { ascending: true });
     if (error) throw error;
@@ -441,8 +435,7 @@ export async function handleArchiveGet(request: NextRequest, context: { params: 
     if (isSupabaseConfigError(error)) {
       if (route === "settings") return json(await getSettings());
       if (route === "categories") return json(defaultCategories);
-      if (["projects", "media", "tags", "series", "inspiration"].includes(route)) return json([]);
-      if (route === "inspiration-config") return json({ tree: parseInspirationTree(""), assignments: {} });
+      if (["projects", "media", "tags", "series"].includes(route)) return json([]);
       if (path[0] === "projects") return json({ error: "Resource not found" }, 404);
       if (path[0] === "media") return json({ error: "Resource not found" }, 404);
     }
@@ -474,9 +467,11 @@ export async function handleArchivePost(request: NextRequest, context: { params:
   if (route === "categories") {
     const form = await request.formData();
     const file = await uploadToStorage(form.get("cover") as File | null);
+    const categorySlug = slugify(formValue(form,"slug") || formValue(form,"name"));
+    if (categorySlug === "product") return json({ error: "产品摄影已经并入摄影，请直接使用摄影分类。" }, 409);
     const payload = {
       name: formValue(form,"name"),
-      slug: slugify(formValue(form,"slug") || formValue(form,"name")),
+      slug: categorySlug,
       description: formValue(form,"description"),
       cover_image: file?.public_url || "",
       sort_order: Number(formValue(form,"sort_order")) || 0,
@@ -507,7 +502,7 @@ export async function handleArchivePost(request: NextRequest, context: { params:
       title: formValue(form,"title"),
       subtitle: formValue(form,"subtitle"),
       slug: slugify(formValue(form,"slug") || formValue(form,"title")),
-      category_id: formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null,
+      category_id: await canonicalCategoryId(formValue(form,"category_id")),
       description: formValue(form,"description"),
       cover_image: file?.public_url || "",
       year: formValue(form,"year"),
@@ -539,9 +534,9 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     const files = Array.isArray(body.files) ? body.files : [];
     if (!files.length) return json({ error: "No uploaded files" }, 400);
     await Promise.all(files.map((file: any) => verifyStorageObject(String(file.storage_path || ""), Number(file.size) || 0)));
-    const payloads = files.map((file: any, index: number) => mediaPayloadFromSaved(file, body, index));
+    const values = { ...body, category_id: await canonicalCategoryId(body.category_id) };
+    const payloads = files.map((file: any, index: number) => mediaPayloadFromSaved(file, values, index));
     const created = await createMediaBatch(payloads, parseTagIds(body.tag_ids));
-    if (toBool(body.show_in_inspiration)) await saveInspirationAssignments(created, body);
     return json(created, 201);
   }
   if (route === "media/upload") {
@@ -549,10 +544,10 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     const files = form.getAll("files").filter((item): item is File => item instanceof File && item.size > 0);
     if (!files.length) return json({ error: "Bad request" }, 400);
     const values = Object.fromEntries(form.entries());
+    values.category_id = await canonicalCategoryId(values.category_id) as any;
     const savedFiles = await Promise.all(files.map((file) => uploadToStorage(file)));
     const payloads = savedFiles.filter(Boolean).map((saved, index) => mediaPayloadFromSaved(saved, values, index));
     const created = await createMediaBatch(payloads, parseTagIds(formValue(form,"tag_ids","[]")));
-    if (toBool(values.show_in_inspiration)) await saveInspirationAssignments(created, values);
     return json(created, 201);
   }
 
@@ -563,18 +558,6 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
   const { path } = await context.params;
   const denied = requireAdmin(request);
   if (denied) return denied;
-
-  if (path[0] === "inspiration-config") {
-    const body: any = await request.json().catch(() => ({}));
-    const values: Record<string, string> = {};
-    if (body.tree !== undefined) values.inspiration_tree_json = JSON.stringify(parseInspirationTree(body.tree));
-    if (body.assignments !== undefined) values.inspiration_resource_map_json = JSON.stringify(parseInspirationResourceMap(body.assignments));
-    await setSettings(values);
-    return json({
-      tree: body.tree !== undefined ? parseInspirationTree(body.tree) : undefined,
-      assignments: body.assignments !== undefined ? parseInspirationResourceMap(body.assignments) : undefined
-    });
-  }
 
   if (path[0] === "settings") {
     const body = await request.json().catch(() => ({}));
@@ -590,9 +573,11 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
     const form = await request.formData();
     const file = await uploadToStorage(form.get("cover") as File | null);
     if (file) await removeStorageUrl(existing.data.cover_image);
+    const categorySlug = slugify(formValue(form,"slug",existing.data.slug));
+    if (categorySlug === "product") return json({ error: "产品摄影已经并入摄影，请直接使用摄影分类。" }, 409);
     const payload = {
       name: formValue(form,"name",existing.data.name),
-      slug: slugify(formValue(form,"slug",existing.data.slug)),
+      slug: categorySlug,
       description: formValue(form,"description",existing.data.description),
       cover_image: file?.public_url || formValue(form,"cover_image", existing.data.cover_image),
       sort_order: Number(formValue(form,"sort_order",String(existing.data.sort_order))) || 0,
@@ -614,7 +599,7 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
       title: formValue(form,"title",existing.data.title),
       subtitle: formValue(form,"subtitle",existing.data.subtitle),
       slug: slugify(formValue(form,"slug",existing.data.slug)),
-      category_id: formValue(form,"category_id") ? Number(formValue(form,"category_id")) : null,
+      category_id: await canonicalCategoryId(formValue(form,"category_id")),
       description: formValue(form,"description",existing.data.description),
       cover_image: file?.public_url || formValue(form,"cover_image", existing.data.cover_image),
       year: formValue(form,"year",existing.data.year),
@@ -640,7 +625,7 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
     const body = await request.json();
     const payload = {
       project_id: body.project_id ? Number(body.project_id) : null,
-      category_id: body.category_id ? Number(body.category_id) : null,
+      category_id: await canonicalCategoryId(body.category_id),
       title: body.title ?? existing.data.title,
       description: body.description ?? existing.data.description,
       tags: body.tags ?? existing.data.tags,
@@ -654,7 +639,6 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
       is_selected: toBool(body.is_selected),
       is_cover: toBool(body.is_cover),
       show_in_database: toBool(body.show_in_database),
-      show_in_inspiration: body.show_in_inspiration === undefined ? existing.data.show_in_inspiration : toBool(body.show_in_inspiration),
       sort_order: Number(body.sort_order ?? existing.data.sort_order),
       updated_at: now()
     };

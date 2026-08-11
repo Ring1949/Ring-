@@ -66,7 +66,6 @@ create table if not exists public.media (
   is_selected boolean default false,
   is_cover boolean default false,
   show_in_database boolean default true,
-  show_in_inspiration boolean default false,
   sort_order integer default 0,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -98,7 +97,6 @@ create index if not exists idx_projects_series on public.projects(is_series, is_
 create index if not exists idx_media_project on public.media(project_id, sort_order, id);
 create index if not exists idx_media_category on public.media(category_id, sort_order, id);
 create index if not exists idx_media_database on public.media(show_in_database, is_selected, sort_order, id);
-create index if not exists idx_media_inspiration on public.media(show_in_inspiration, sort_order, id);
 create index if not exists idx_media_hero on public.media(is_hero, updated_at desc, sort_order, id desc);
 
 insert into public.settings (key, value, updated_at) values
@@ -111,12 +109,29 @@ insert into public.settings (key, value, updated_at) values
 on conflict (key) do nothing;
 
 insert into public.categories (name, slug, description, sort_order, is_primary) values
-  ('摄影','photo','城市、光线、胶片与观看方式。',1,true),
+  ('摄影','photo','人物、现场、城市、产品与观看方式。',1,true),
   ('平面','graphic','字体、版式、品牌与视觉系统。',2,true),
   ('空间','space','尺度、材质、光线与空间秩序。',3,true),
   ('AI','ai','图像生成、风格测试与概念草图。',4,true),
   ('其他','other','日常实验、手绘、厨艺、手工与未完成想法。',5,true)
 on conflict (slug) do nothing;
+
+-- Idempotent, lossless migration for installations that previously used a
+-- top-level `product` category. Discover the real IDs instead of assuming a
+-- seed value, move all references first, and only then remove the old row.
+do $$
+declare
+  photo_category_id bigint;
+  product_category_id bigint;
+begin
+  select id into photo_category_id from public.categories where slug = 'photo' limit 1;
+  select id into product_category_id from public.categories where slug = 'product' limit 1;
+  if photo_category_id is not null and product_category_id is not null then
+    update public.projects set category_id = photo_category_id, updated_at = now() where category_id = product_category_id;
+    update public.media set category_id = photo_category_id, updated_at = now() where category_id = product_category_id;
+    delete from public.categories where id = product_category_id;
+  end if;
+end $$;
 
 insert into public.tags (name, slug) values
   ('3D','3d'),('视频','video'),('厨艺','cooking'),('手绘','drawing'),('手工','craft'),

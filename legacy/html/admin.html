@@ -5,7 +5,7 @@
   <title>内容管理 — 山川行止</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260716-inspiration-2">
+  <link rel="stylesheet" href="admin.css?v=20260811-skill-library-1">
   <link rel="stylesheet" href="/glass-surface.css?v=20260702-1">
 </head>
 <body>
@@ -14,10 +14,10 @@
       <a class="admin-logo" href="/"></a>
       <nav>
         <button class="active" data-view="settings">首页设置</button>
-        <button data-view="media">上传作品</button>
+        <a class="admin-nav-link" href="/admin/uploads">上传作品</a>
         <button data-view="projects">系列管理</button>
         <button data-view="categories">作品管理</button>
-        <button data-view="inspiration">&#28789;&#24863;&#39057;&#36947;</button>
+        <a class="admin-nav-link" href="/admin/skills">Skill 库</a>
         <button data-view="contact">联系方式</button>
       </nav>
       <div><a href="/" target="_blank">查看网站 ↗</a><button id="logout">退出登录</button></div>
@@ -28,7 +28,7 @@
       <section class="admin-view active" data-panel="settings">
         <div class="admin-tip">
           <div><b>首页背景直接选择本地文件</b><span>图片保持静止；视频会静音、自动播放并循环。</span></div>
-          <button type="button" data-jump-view="media">打开作品上传</button>
+          <a href="/admin/uploads">打开作品上传</a>
         </div>
         <form id="settings-form" class="form-card">
           <div class="field"><label>网站名称</label><input name="site_name"></div>
@@ -104,17 +104,12 @@
           <div class="field wide"><label>系统标签</label><div id="media-tag-options" class="checks"></div></div>
           <div class="checks purpose-options wide"><label><input name="is_hero" type="checkbox"> 设为首页全屏背景</label><label><input name="is_selected" type="checkbox"> 加入精选作品</label><label><input name="show_in_database" type="checkbox" checked> 加入作品库</label><label><input name="is_cover" type="checkbox"> 设为所属作品封面</label></div>
           <div id="media-upload-status" class="media-upload-status wide" aria-live="polite"></div>
-          <button id="media-upload-button" class="primary upload-submit" type="submit"><span>上传并永久保存</span><small>保存到 SQLite + uploads</small></button>
+          <button id="media-upload-button" class="primary upload-submit" type="submit"><span>上传并永久保存</span><small>保存到 Vercel Blob 持久存储</small></button>
         </form>
         <div class="media-library-head"><div><p>WORK LIBRARY</p><h2>已上传作品素材</h2></div><span id="media-count"></span></div>
         <div id="media-list" class="media-admin-grid"></div>
       </section>
 
-
-      <section class="admin-view" data-panel="inspiration">
-        <div class="media-guide inspiration-guide"><p>INSPIRATION ARCHIVE</p><h2>&#28789;&#24863;&#39057;&#36947;&#31649;&#29702;</h2><ol><li>&#32534;&#36753;&#19968;&#32423;&#39057;&#36947;&#19982;&#20108;&#32423;&#33410;&#28857;</li><li>&#20851;&#32852;&#25110;&#19978;&#20256;&#19977;&#32423;&#32032;&#26448;</li><li>&#20445;&#23384;&#21518;&#21516;&#27493;&#21040;&#28789;&#24863;&#23431;&#23449;</li></ol></div>
-        <div id="inspiration-admin" class="inspiration-admin" aria-live="polite"></div>
-      </section>
 
       <section class="admin-view" data-panel="contact">
         <form id="contact-form" class="form-card">
@@ -140,7 +135,7 @@
 
   <div id="modal" class="modal" hidden><div class="modal-card"><button class="modal-close">×</button><div id="modal-content"></div></div></div>
   <script src="/glass-surface.js?v=20260702-1"></script>
-  <script src="/common.js?v=20260623-1"></script><script src="admin.js?v=20260719-inspiration-sync-1"></script>
+  <script src="/common.js?v=20260811-skill-library-1"></script><script src="admin.js?v=20260811-skill-library-1"></script>
 </body>
 </html>
 

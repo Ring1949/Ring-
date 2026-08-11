@@ -1,6 +1,7 @@
 import { getSettings } from "@/lib/db";
 import { getSupabaseServer } from "@/lib/supabase";
 import { fallbackHomePayload, isSupabaseConfigError } from "@/lib/fallback-data";
+import { importedPhotoLibrary } from "@/lib/photo-library";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 const normalizeProject = (project: any) => ({
@@ -17,7 +18,6 @@ const normalizeMedia = (media: any) => ({
   is_selected: flag(media.is_selected),
   is_cover: flag(media.is_cover),
   show_in_database: flag(media.show_in_database),
-  show_in_inspiration: flag(media.show_in_inspiration),
   category_name: media.categories?.name || media.category_name || "",
   category_slug: media.categories?.slug || media.category_slug || ""
 });
@@ -120,6 +120,7 @@ async function getHomePayloadFromSupabase() {
 }
 
 export async function getHomePayload() {
+  if (importedPhotoLibrary.media?.length) return fallbackHomePayload;
   try {
     return await getHomePayloadFromSupabase();
   } catch (error) {

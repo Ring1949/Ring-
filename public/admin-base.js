@@ -1,5 +1,5 @@
 const state = { settings:{}, categories:[], projects:[], media:[], tags:[] };
-const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4e0a\u4f20\u4f5c\u54c1",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u4f5c\u54c1\u7ba1\u7406",inspiration:"\u7075\u611f\u9891\u9053",contact:"\u8054\u7cfb\u65b9\u5f0f" };
+const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4e0a\u4f20\u4f5c\u54c1",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u4f5c\u54c1\u7ba1\u7406",contact:"\u8054\u7cfb\u65b9\u5f0f" };
 
 const REQUEST_TIMEOUT_MS = 45000;
 function readableRequestError(error, action = "操作") {

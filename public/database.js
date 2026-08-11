@@ -28,8 +28,12 @@ if (archiveFilters) {
 }
 
 function normalizeArchiveItem(item) {
+  const categorySlug = item.category_slug === "product" ? "photo" : item.category_slug;
   return {
     ...item,
+    category_id: item.category_slug === "product" ? 1 : item.category_id,
+    category_name: item.category_slug === "product" ? "摄影" : item.category_name,
+    category_slug: categorySlug,
     tagsList: String(item.tags || "").split(/[,，]/).map((tag) => tag.trim()).filter(Boolean)
   };
 }

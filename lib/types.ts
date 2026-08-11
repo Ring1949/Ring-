@@ -62,7 +62,6 @@ export type Media = {
   is_selected?: number | boolean;
   is_cover?: number | boolean;
   show_in_database?: number | boolean;
-  show_in_inspiration?: number | boolean;
   sort_order?: number;
   created_at?: string;
   updated_at?: string;
@@ -73,8 +72,6 @@ export type Media = {
   category_name?: string;
   category_slug?: string;
   tag_ids?: string;
-  inspiration_channel?: string;
-  inspiration_chapter?: string;
   source_url?: string;
 };
 

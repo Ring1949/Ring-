@@ -79,3 +79,15 @@ body{background:var(--works-bg);color:var(--works-ink);transition:background .35
   .works-nav.nav{height:auto!important;grid-template-columns:1fr auto!important;gap:10px 16px!important;padding:14px 18px!important}
   .works-nav .main-nav{grid-column:1/-1;grid-row:2;width:100%!important;overflow:auto!important}
 }
+
+/* Progressive gallery: stable media slots, lightweight skeletons and status. */
+.item-media{display:block;width:100%;aspect-ratio:var(--media-ratio,4/3);overflow:hidden;background:#e5e6e2}
+.item-media>img,.item-media>video{width:100%!important;height:100%!important;object-fit:cover}
+.item-skeleton{min-height:180px;aspect-ratio:var(--skeleton-ratio,4/3);cursor:default;background:linear-gradient(105deg,#e5e6e2 30%,#f1f1ed 46%,#e5e6e2 62%);background-size:220% 100%;animation:works-skeleton 1.25s ease-in-out infinite}
+.gallery-status{min-height:52px;padding:18px 0 6px;text-align:center;color:var(--works-sub);font-size:11px;letter-spacing:.04em}
+.gallery-sentinel{height:1px}
+.gallery-retry{margin-left:10px;padding:7px 13px;border:1px solid var(--works-line);border-radius:999px;color:var(--works-ink);background:var(--works-panel);cursor:pointer}
+.detail-loading{width:44px;height:44px;border:3px solid #ffffff30;border-top-color:#fff;border-radius:50%;animation:works-spin .8s linear infinite}
+@keyframes works-skeleton{to{background-position:-220% 0}}
+@keyframes works-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.item-skeleton,.detail-loading{animation:none}}
