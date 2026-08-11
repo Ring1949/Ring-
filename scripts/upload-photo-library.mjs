@@ -51,9 +51,10 @@ function generatedPayload(uploaded) {
     const product = item.record.root_kind === "product"
       || source.collection_slug === "product"
       || String(source.project_slug || "").startsWith("product-");
+    const publicUrl = item.local_url || item.url;
     return {
       ...source,
-      file_path: item.url,
+      file_path: publicUrl,
       category_id: 1,
       category_name: "摄影",
       category_slug: "photo",
@@ -103,7 +104,7 @@ function generatedPayload(uploaded) {
   const categories = [
     { id: 1, name: "摄影", slug: "photo", description: "人物、现场、城市、产品与观看方式。", cover_image: photoCover, sort_order: 1, is_primary: 1, project_count: projects.length }
   ];
-  return { version: 3, generated_at: new Date().toISOString(), categories, projects, media };
+  return { version: media.some((item) => String(item.file_path || "").startsWith("/portfolio-static/")) ? 4 : 3, generated_at: new Date().toISOString(), categories, projects, media };
 }
 
 async function uploadOne(record, token) {

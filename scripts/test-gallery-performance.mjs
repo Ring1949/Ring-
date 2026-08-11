@@ -12,13 +12,14 @@ async function json(pathname) {
 }
 
 const generated = JSON.parse(fs.readFileSync(new URL("../public/generated/photo-library.json", import.meta.url), "utf8"));
-assert.equal(generated.version, 3, "the pruned index must use version 3");
+assert.equal(generated.version, 4, "the durable static index must use version 4");
 assert.equal(generated.categories.length, 1, "product photography is no longer a top-level category");
 assert.equal(generated.categories[0].slug, "photo");
 assert.equal(generated.projects.length, 34, "all photography projects must remain");
 assert.equal(generated.media.length, 1203, "exactly 1,000 of the original 2,203 public photos must be removed");
 assert.equal(generated.media.every((item) => item.category_slug === "photo"), true);
 assert.equal(generated.media.filter((item) => item.collection_slug === "product").length, 723, "product photography remains a photography subcollection");
+assert.equal(generated.media.every((item) => String(item.file_path).startsWith("/portfolio-static/")), true, "public photos must use durable in-repository URLs");
 
 const first = await json("/api/database?view=gallery&category=photo&filter=product&limit=24");
 assert.equal(first.payload.items.length, 24, "gallery should return one small first page");
