@@ -86,7 +86,7 @@ async function removeFromBlob(selected) {
   const pending = selected.filter((item) => !completed.has(String(item.id)));
   for (let offset = 0; offset < pending.length; offset += 100) {
     const batch = pending.slice(offset, offset + 100);
-    await del(batch.map((item) => item.file_path || item.url), { token });
+    await del(batch.map((item) => item.blob_url || item.file_path || item.url), { token });
     for (const item of batch) completed.add(String(item.id));
     fs.writeFileSync(progressPath, JSON.stringify({ updated_at: new Date().toISOString(), deleted: [...completed] }, null, 2));
     console.log(`远端已删除 ${completed.size}/${selected.length}`);
