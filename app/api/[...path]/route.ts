@@ -6,12 +6,12 @@ import { handleArchiveDelete, handleArchiveGet, handleArchivePost, handleArchive
 import {
   getRecoveredCategories,
   getRecoveredHomePayload,
-  getRecoveredInspirationConfig,
   getRecoveredMedia,
   getRecoveredProjects,
   getRecoveredSettings,
   getRecoveredTags
 } from "@/lib/recovered-data";
+import { getBlobMediaRecords } from "@/lib/blob-library";
 
 type ArchiveContext = { params: Promise<{ path: string[] }> };
 
@@ -26,8 +26,7 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
 
   if (route === "me") return NextResponse.json({ authenticated: false });
   if (route === "settings") return NextResponse.json(getRecoveredSettings());
-  if (route === "inspiration-config") return NextResponse.json(getRecoveredInspirationConfig());
-  if (route === "categories") return NextResponse.json(getRecoveredCategories());
+  if (route === "categories") return NextResponse.json(getRecoveredCategories().filter((item: any) => item.slug !== "product"));
   if (route === "tags") return NextResponse.json(getRecoveredTags());
   if (route === "projects") {
     let projects = getRecoveredProjects();
@@ -46,7 +45,7 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
     });
   }
   if (route === "media") {
-    let media = getRecoveredMedia();
+    let media = [...await getBlobMediaRecords(), ...getRecoveredMedia()];
     const projectId = search.get("project_id");
     const categoryId = search.get("category_id");
     if (projectId) media = media.filter((item: any) => Number(item.project_id) === Number(projectId));
@@ -63,12 +62,15 @@ async function runArchiveRequest(
   context: ArchiveContext
 ) {
   const startedAt = Date.now();
+  const { path } = await context.params;
+  const route = path.join("/");
+  if (route === "inspiration" || route === "inspiration-config" || route.startsWith("inspiration/")) {
+    return NextResponse.json({ error: "该频道已经删除。" }, { status: 404 });
+  }
   try {
     const handler = method === "GET" ? handleArchiveGet : method === "POST" ? handleArchivePost : method === "PUT" ? handleArchivePut : handleArchiveDelete;
     const response = await handler(request, context);
     if (method === "GET") {
-      const { path } = await context.params;
-      const route = path.join("/");
       if (["projects", "media", "categories", "tags"].includes(route)) {
         const body = await response.clone().text();
         if (body.trim() === "[]" || body.trim() === "{}" || body.trim() === "") return recoveredGet(request, context);

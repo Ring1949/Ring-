@@ -9,8 +9,8 @@ async function initHome() {
   document.querySelectorAll("[data-category-cover]").forEach((container) => {
     const category = categories.find((item) => item.slug === container.dataset.categoryCover);
     const image = container.querySelector("img");
-    image.onerror = () => { image.onerror = null; image.src = "/assets/archive-collage.png"; };
-    image.src = category?.cover_image || "/assets/archive-collage.png";
+    image.onerror = () => { image.onerror = null; image.src = optimizedImagePath("/assets/archive-collage.png", 640, 72); };
+    image.src = optimizedImagePath(category?.cover_image || "/assets/archive-collage.png", 640, 72);
   });
   document.title = `${settings.site_name || "山川行止"} — 个人视觉档案`;
   document.querySelector("#hero-title").textContent = settings.hero_title || settings.site_name;
@@ -31,7 +31,7 @@ async function initHome() {
     ["小红书",settings.xiaohongshu],["Instagram",settings.instagram],["Behance",settings.behance]
   ].filter(([,href]) => href);
   document.querySelector("#footer-links").innerHTML = [
-    `<a href="/series.html">系列作品</a>`,`<a href="/works.html?category=all">作品库</a>`,`<a href="/inspiration.html">灵感库</a>`,`<a href="#extensions">扩展</a>`,`<a href="#about">关于</a>`,
+    `<a href="/series.html">系列作品</a>`,`<a href="/works.html?category=all">作品库</a>`,`<a href="#extensions">扩展</a>`,`<a href="#about">关于</a>`,
     ...socialLinks.map(([label,href]) => `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${label}</a>`)
   ].join("");
   document.querySelector("#hero-media").innerHTML = heroMediaMarkup(hero.file_path, hero.media_type || hero.file_type || settings.hero_media_type, settings.site_name);
@@ -73,30 +73,8 @@ async function initHome() {
     </a>`;
   }).join("");
   document.querySelector(".recommend-window")?.classList.toggle("is-empty", !recommended.length);
-  updateRecommend();
+  requestAnimationFrame(updateRecommend);
 
-  const inspirationConfig = await api("/api/inspiration-config").catch(() => null);
-  const inspirationChannels = inspirationConfig?.tree?.channels?.length
-    ? inspirationConfig.tree.channels.map((channel) => [channel.title, channel.english, channel.id])
-    : [["\u6444\u5f71","PHOTOGRAPHY","photo"],["\u5e73\u9762","GRAPHIC","graphic"],["\u7a7a\u95f4","SPACE","space"],["AI","GENERATIVE","ai"],["\u5176\u4ed6","OTHER","other"]];
-  document.querySelector("#channel-list").innerHTML = inspirationChannels.map(([name,label,slug], index) => `
-    <button class="channel" type="button" data-explore-channel="${slug}">
-      <div class="channel-index">0${index+1}</div><div class="channel-icon">•</div>
-      <h3>${name}</h3><p>${label}</p><span>进入探索模式 ↗</span>
-    </button>`).join("");
-  setupHomeExploreChannels();
-}
-
-
-function setupHomeExploreChannels(){
-  document.querySelectorAll("[data-explore-channel]").forEach((button)=>{
-    button.addEventListener("click",(event)=>{
-      event.preventDefault();
-      window.dispatchEvent(new CustomEvent("shanchuan:open-inspiration-cloud",{
-        detail:{category:button.dataset.exploreChannel || "photo"}
-      }));
-    });
-  });
 }
 
 function projectCard(project, index, main) {
@@ -190,6 +168,10 @@ function setupWorksLibraryBorderGlow(){
 setupWorksLibraryBorderGlow();
 document.querySelector(".carousel-button.left").addEventListener("click", () => moveRecommend(-1));
 document.querySelector(".carousel-button.right").addEventListener("click", () => moveRecommend(1));
-addEventListener("resize", updateRecommend);
+let recommendResizeFrame = 0;
+addEventListener("resize", () => {
+  cancelAnimationFrame(recommendResizeFrame);
+  recommendResizeFrame = requestAnimationFrame(updateRecommend);
+});
 setupNavigation(document.querySelector(".hero"));
 initHome().catch((error) => console.error(error));

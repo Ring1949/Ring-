@@ -7,8 +7,8 @@ import styles from "./ContactLanyardOverlay.module.css";
 type ContactSettings = Record<string, string>;
 const defaults: ContactSettings = { contact_title: "\u4e00\u8d77\u505a\u70b9\u4ec0\u4e48", contact_intro: "\u5982\u679c\u60f3\u804a\u804a\u5408\u4f5c\u3001\u6444\u5f71\u6216\u8bbe\u8ba1\uff0c\u53ef\u4ee5\u4ece\u8fd9\u91cc\u8054\u7cfb\u6211\u3002", contact_location: "\u6b66\u6c49 / \u53ef\u8fdc\u7a0b\u5408\u4f5c", contact_name: "RING", contact_phone: "18569569185", contact_role: "Visual Creator / Designer" };
 
-export default function ContactLanyardOverlay() {
-  const [open, setOpen] = useState(false);
+export default function ContactLanyardOverlay({ initialOpen = false }: { initialOpen?: boolean }) {
+  const [open, setOpen] = useState(initialOpen);
   const [copied, setCopied] = useState("");
   const [settings, setSettings] = useState<ContactSettings>(defaults);
   useEffect(() => { const onClick = (event: MouseEvent) => { const target = event.target as HTMLElement | null; if (!target?.closest("#contact-link")) return; event.preventDefault(); event.stopPropagation(); setOpen(true); }; document.addEventListener("click", onClick, true); return () => document.removeEventListener("click", onClick, true); }, []);

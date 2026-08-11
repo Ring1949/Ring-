@@ -9,22 +9,33 @@ const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => (
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
 })[char]);
 
-const mediaMarkup = (path, type = "image", alt = "") => {
+function optimizedImagePath(path, width = 1080, quality = 76) {
+  if (!path || !String(path).startsWith("/") || String(path).startsWith("/_next/image") || /\.(svg|gif)$/i.test(String(path))) return path;
+  return `/_next/image?url=${encodeURIComponent(path)}&w=${width}&q=${quality}`;
+}
+
+const mediaMarkup = (path, type = "image", alt = "", width = 1080) => {
   if (!path) return `<div class="media-placeholder"><span>${escapeHtml(alt).slice(0, 2) || "SC"}</span></div>`;
   if (type === "video") return `<video src="${escapeHtml(path)}" controls playsinline preload="metadata"></video>`;
   if (type === "file") return `<a class="file-download-card" href="${escapeHtml(path)}" download><b>↧</b><span>${escapeHtml(alt || "下载文件")}</span></a>`;
-  return `<img src="${escapeHtml(path)}" alt="${escapeHtml(alt)}" loading="lazy">`;
+  return `<img src="${escapeHtml(optimizedImagePath(path, width))}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async">`;
 };
 
 const heroMediaMarkup = (path, type = "image", alt = "") => {
   if (type === "video") return `<video src="${escapeHtml(path)}" muted autoplay loop playsinline preload="auto" aria-label="${escapeHtml(alt)}"></video>`;
-  return mediaMarkup(path, "image", alt);
+  return mediaMarkup(path, "image", alt, 1920);
 };
 
 function setupNavigation(hero) {
   const nav = document.querySelector(".nav");
+  let heroHeight = hero ? innerHeight : 0;
+  const heroObserver = hero && "ResizeObserver" in window ? new ResizeObserver((entries) => {
+    const size = entries[0]?.borderBoxSize;
+    heroHeight = Array.isArray(size) ? size[0]?.blockSize || innerHeight : size?.blockSize || innerHeight;
+  }) : null;
+  heroObserver?.observe(hero);
   const update = () => {
-    const scrolled = hero ? scrollY >= hero.offsetHeight - 70 : true;
+    const scrolled = hero ? scrollY >= heroHeight - 70 : true;
     nav.classList.toggle("nav-scrolled", scrolled);
     nav.classList.toggle("nav-over-hero", !scrolled);
   };
@@ -42,7 +53,7 @@ function setupNavigation(hero) {
     links.classList.toggle("open",open);
     button.setAttribute("aria-expanded",String(open));
   });
-  const sectionIds = new Set(["series", "inspiration", "extensions", "about"]);
+  const sectionIds = new Set(["series", "extensions", "about"]);
   const alignSection = (section, behavior = "smooth") => {
     const navHeight = nav?.getBoundingClientRect().height || 70;
     const top = section.getBoundingClientRect().top + window.scrollY;
@@ -74,7 +85,7 @@ function setupNavigation(hero) {
 function openLightbox(path, type = "image", title = "") {
   const box = document.createElement("div");
   box.className = "lightbox";
-  box.innerHTML = `<button aria-label="关闭">×</button><div>${mediaMarkup(path, type, title)}<p>${escapeHtml(title)}</p></div>`;
+  box.innerHTML = `<button aria-label="关闭">×</button><div>${mediaMarkup(path, type, title, 1920)}<p>${escapeHtml(title)}</p></div>`;
   box.addEventListener("click", (event) => {
     if (event.target === box || event.target.tagName === "BUTTON") box.remove();
   });
@@ -150,8 +161,8 @@ function setupAdminLogin() {
 const languageDictionary = {
   "首页":"Home","系列作品":"Series","作品库":"Works","扩展":"Extensions","关于":"About","进入后台":"Admin",
   "也许你会喜欢":"You may also like","进入更多系列 ↗":"More series ↗","我的作品库":"Works Library",
-  "查看全部 ↗":"View all ↗","灵感频道":"Inspiration Channels","摄影":"Photography","平面":"Graphic",
-  "空间":"Space","其他":"Other","进入频道 ↗":"Explore ↗","一起做点什么 ↗":"Start a project ↗",
+  "查看全部 ↗":"View all ↗","摄影":"Photography","平面":"Graphic",
+  "空间":"Space","其他":"Other","一起做点什么 ↗":"Start a project ↗",
   "作品集":"Works","AI 小说工作室":"AI Novel Studio","本地小说生产与审核工作台。":"Local novel production and review workspace.","打开本地工作室 ↗":"Open local studio ↗","请先在本机启动 AI 小说工作室网页":"Start the AI Novel Studio webpage locally first.","登录":"Log in","输入四位密码":"Enter 4-digit password"
 };
 function setupLanguageToggle(){
@@ -175,7 +186,16 @@ function setupLanguageToggle(){
       if(element.children.length)return;
       const value=element.textContent.trim();
       if(!value)return;
-      if(!element.dataset.zhText)element.dataset.zhText=value;
+      if(!element.dataset.zhText){
+        element.dataset.zhText=value;
+      }else if(!english&&value!==element.dataset.zhText){
+        // Dynamic status/detail text is authoritative in Chinese mode.
+        element.dataset.zhText=value;
+      }else if(english){
+        const previous=element.dataset.zhText;
+        const translated=languageDictionary[previous]||previous;
+        if(value!==previous&&value!==translated)element.dataset.zhText=value;
+      }
       const original=element.dataset.zhText;
       const target=english?(languageDictionary[original]||original):original;
       if(element.textContent!==target)element.textContent=target;

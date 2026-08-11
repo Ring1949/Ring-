@@ -9,3 +9,12 @@ npm-debug.log*
 
 .vercel
 .env*
+.photo-import-state.json
+.photo-import-cache/
+.photo-import-prepared.json
+.blob-upload-state.json
+.photo-prune-backup.json
+.photo-prune-progress.json
+.photo-import-tools/
+docs/data-backups/
+tsconfig.tsbuildinfo

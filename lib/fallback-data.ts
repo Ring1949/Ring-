@@ -1,5 +1,5 @@
-﻿import { defaultInspirationTree } from "@/lib/inspiration";
 import { getRecoveredCategories, getRecoveredHomePayload, getRecoveredSettings } from "@/lib/recovered-data";
+import { importedPhotoLibrary, mergeImportedCategories } from "@/lib/photo-library";
 
 export const defaultSettings: Record<string, string> = {
   site_name: "山川行止",
@@ -21,13 +21,11 @@ export const defaultSettings: Record<string, string> = {
   contact_name: "RING",
   contact_phone: "18569569185",
   contact_role: "Visual Creator / Designer",
-  inspiration_tree_json: JSON.stringify(defaultInspirationTree),
-  inspiration_resource_map_json: "{}",
   footer_text: "视觉档案 / 武汉 / 2026",
   footer_copyright: "© 2026 SHANCHUAN STUDIO"
 };
 
-export const defaultCategories = getRecoveredCategories().length
+const recoveredCategories = getRecoveredCategories().length
   ? getRecoveredCategories()
   : [
       { id: 1, name: "摄影", slug: "photo", description: "城市、光线、胶片与观看方式。", cover_image: "", sort_order: 1, is_primary: 1, project_count: 0 },
@@ -37,7 +35,9 @@ export const defaultCategories = getRecoveredCategories().length
       { id: 5, name: "其他", slug: "other", description: "日常实验、手绘、厨艺、手工与未完成想法。", cover_image: "", sort_order: 5, is_primary: 1, project_count: 0 }
     ];
 
-export const fallbackHomePayload = getRecoveredHomePayload()?.database_preview?.length
+export const defaultCategories = mergeImportedCategories(recoveredCategories);
+
+const recoveredHome = getRecoveredHomePayload()?.database_preview?.length
   ? getRecoveredHomePayload()
   : {
       settings: { ...defaultSettings, ...getRecoveredSettings() },
@@ -47,6 +47,15 @@ export const fallbackHomePayload = getRecoveredHomePayload()?.database_preview?.
       categories: defaultCategories,
       database_preview: []
     };
+
+export const fallbackHomePayload = {
+  ...recoveredHome,
+  categories: mergeImportedCategories(recoveredHome.categories || defaultCategories),
+  database_preview: [
+    ...(importedPhotoLibrary.media || []).filter((item: any) => item.show_in_database).slice(0, 12),
+    ...(recoveredHome.database_preview || [])
+  ].slice(0, 12)
+};
 
 export function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
