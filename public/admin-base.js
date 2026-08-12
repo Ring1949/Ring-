@@ -204,7 +204,7 @@ function openCategoryModal(item={}) {
     <div class="field"><label>Slug</label><input name="slug" value="${escapeHtml(item.slug||"")}"></div>
     <div class="field wide"><label>描述</label><textarea name="description">${escapeHtml(item.description||"")}</textarea></div>
     <div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
-    <div class="field"><label>封面</label><input name="cover" type="file" accept="image/*"></div><button class="primary wide">保存分类</button></form>`);
+    <div class="field"><label>封面</label><a class="admin-cover-link" href="/admin/uploads#cover-manager">前往统一封面设置 →</a></div><button class="primary wide">保存分类</button></form>`);
   document.querySelector("#category-form").addEventListener("submit",saveCategory);
 }
 async function saveCategory(event) {
@@ -220,7 +220,7 @@ function openProjectModal(item={}) {
     <div class="field"><label>年份</label><input name="year" value="${escapeHtml(item.year||"")}"></div><div class="field"><label>地点</label><input name="location" value="${escapeHtml(item.location||"")}"></div>
     <div class="field wide"><label>描述</label><textarea name="description" rows="5">${escapeHtml(item.description||"")}</textarea></div>
     <div class="field wide"><label>文字标签（逗号分隔）</label><input name="tags" value="${escapeHtml(item.tags||"")}"></div>
-    <div class="field"><label>系列封面（本地图片）</label><input name="cover" type="file" accept="image/*"></div><div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
+    <div class="field"><label>系列封面</label><a class="admin-cover-link" href="/admin/uploads#cover-manager">前往统一封面设置 →</a></div><div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
     <div class="field"><label>状态</label><select name="status"><option value="draft" ${item.status==="draft"?"selected":""}>草稿</option><option value="published" ${item.status==="published"?"selected":""}>已发布</option></select></div>
     <div class="checks"><label><input name="is_featured" type="checkbox" ${item.is_featured?"checked":""}> 首页精选</label><label><input name="is_recommended" type="checkbox" ${item.is_recommended?"checked":""}> 推荐内容</label></div>
     <div class="field wide"><label>标签</label><div class="checks project-edit-tags">${state.tags.map((tag)=>`<label class="system-tag-option"><input name="tag_ids" value="${tag.id}" type="checkbox" ${selectedTags.includes(tag.id)?"checked":""}><span>${escapeHtml(tag.name)}</span></label>`).join("")}</div></div>

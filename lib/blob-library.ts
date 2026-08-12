@@ -10,6 +10,7 @@ export const SKILL_FILE_PREFIX = "skill-library/files/";
 export const MEDIA_FILE_PREFIX = "portfolio/admin/";
 const SKILL_MANIFEST_PREFIX = "site-state/v1/skill-library/";
 const MEDIA_MANIFEST_PREFIX = "site-state/v1/media-library/";
+const PORTFOLIO_COVER_MANIFEST_PREFIX = "site-state/v1/portfolio-covers/";
 
 export const DEFAULT_SKILL_MAX_BYTES = 100 * 1024 * 1024;
 export const DEFAULT_MEDIA_MAX_BYTES = 250 * 1024 * 1024;
@@ -188,6 +189,28 @@ export async function saveBlobMediaRecords(media: BlobMediaRecord[]) {
     media
   };
   await appendManifest(MEDIA_MANIFEST_PREFIX, next);
+  return next;
+}
+
+export async function getPortfolioCoverOverrides() {
+  const { normalizeCoverOverrides } = await import("@/lib/portfolio-state");
+  return normalizeCoverOverrides(await readLatestManifest(PORTFOLIO_COVER_MANIFEST_PREFIX, () => ({
+    version: 1,
+    updated_at: new Date(0).toISOString(),
+    categories: {},
+    projects: {}
+  })));
+}
+
+export async function savePortfolioCoverOverrides(overrides: unknown) {
+  const { normalizeCoverOverrides } = await import("@/lib/portfolio-state");
+  const current = normalizeCoverOverrides(overrides);
+  const next = {
+    ...current,
+    version: Math.max(1, Number(current.version) || 1) + 1,
+    updated_at: new Date().toISOString()
+  };
+  await appendManifest(PORTFOLIO_COVER_MANIFEST_PREFIX, next);
   return next;
 }
 
