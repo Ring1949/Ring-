@@ -4,14 +4,18 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { handleArchiveDelete, handleArchiveGet, handleArchivePost, handleArchivePut } from "@/services/archive.service";
 import {
-  getRecoveredCategories,
   getRecoveredHomePayload,
   getRecoveredMedia,
-  getRecoveredProjects,
   getRecoveredSettings,
   getRecoveredTags
 } from "@/lib/recovered-data";
-import { getBlobMediaRecords } from "@/lib/blob-library";
+import { getBlobMediaRecords, getPortfolioCoverOverrides } from "@/lib/blob-library";
+import {
+  applyCategoryCoverOverrides,
+  applyProjectCoverOverrides,
+  basePortfolioCategories,
+  basePortfolioProjects
+} from "@/lib/portfolio-state";
 
 type ArchiveContext = { params: Promise<{ path: string[] }> };
 
@@ -26,17 +30,22 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
 
   if (route === "me") return NextResponse.json({ authenticated: false });
   if (route === "settings") return NextResponse.json(getRecoveredSettings());
-  if (route === "categories") return NextResponse.json(getRecoveredCategories().filter((item: any) => item.slug !== "product"));
+  if (route === "categories") {
+    const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
+    return NextResponse.json(applyCategoryCoverOverrides(basePortfolioCategories(), overrides));
+  }
   if (route === "tags") return NextResponse.json(getRecoveredTags());
   if (route === "projects") {
-    let projects = getRecoveredProjects();
+    const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
+    let projects = applyProjectCoverOverrides(basePortfolioProjects(), overrides);
     if (search.get("series") === "true") projects = projects.filter((item: any) => flag(item.is_series));
     if (search.get("recommended") === "true") projects = projects.filter((item: any) => flag(item.is_recommended));
     return NextResponse.json(projects);
   }
   if (route.startsWith("projects/")) {
     const id = Number(path[1]);
-    const project = getRecoveredProjects().find((item: any) => Number(item.id) === id || item.slug === path[1]);
+    const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
+    const project = applyProjectCoverOverrides(basePortfolioProjects(), overrides).find((item: any) => Number(item.id) === id || item.slug === path[1]);
     if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({
       ...project,
@@ -74,6 +83,21 @@ async function runArchiveRequest(
       if (["projects", "media", "categories", "tags"].includes(route)) {
         const body = await response.clone().text();
         if (body.trim() === "[]" || body.trim() === "{}" || body.trim() === "") return recoveredGet(request, context);
+        if ((route === "categories" || route === "projects") && response.ok) {
+          const items = JSON.parse(body);
+          if (Array.isArray(items)) {
+            const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
+            const overlaid = route === "categories"
+              ? applyCategoryCoverOverrides(items, overrides)
+              : applyProjectCoverOverrides(items, overrides);
+            return NextResponse.json(overlaid, { status: response.status, headers: { "Cache-Control": "private, no-store" } });
+          }
+        }
+      }
+      if (route.startsWith("projects/") && response.ok) {
+        const project = await response.clone().json();
+        const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
+        return NextResponse.json(applyProjectCoverOverrides([project], overrides)[0], { status: response.status, headers: { "Cache-Control": "private, no-store" } });
       }
     }
     if (method !== "GET") console.info("[archive] completed", { method, path: request.nextUrl.pathname, status: response.status, duration_ms: Date.now() - startedAt });
