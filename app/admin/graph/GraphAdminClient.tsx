@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { CreativeGraphData, CreativeGraphLink, CreativeGraphNode } from "@/lib/creative-graph";
 import { defaultCreativeGraph } from "@/lib/creative-graph";
+import { AdminGraphCanvas } from "./AdminGraphCanvas";
 import styles from "./graph-admin.module.css";
 
 const emptyNode = (): CreativeGraphNode => ({ id: "", name: "", category: "未分类", summary: "", detail: "", level: "node", status: "active", link: "" });
@@ -39,7 +40,7 @@ export function GraphAdminClient() {
         </form></section>
         <section className={styles.panel}><h2>新增连接</h2><form className={styles.linkForm} onSubmit={addLink}><select value={source} onChange={(event) => setSource(event.target.value)} required><option value="">第一个节点</option>{sortedNodes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span>连接</span><select value={target} onChange={(event) => setTarget(event.target.value)} required><option value="">第二个节点</option>{sortedNodes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button>添加连接</button></form><div className={styles.links}>{graph.links.map((item) => <article key={item.id}><span>{graph.nodes.find((node) => node.id === item.source)?.name} ↔ {graph.nodes.find((node) => node.id === item.target)?.name}</span><button onClick={() => setGraph((current) => ({ ...current, links: current.links.filter((link) => link.id !== item.id) }))}>删除</button></article>)}</div></section>
       </div>
-      <section className={styles.panel}><div className={styles.listHead}><h2>全部节点</h2><span>{graph.nodes.length} 个节点 · {graph.links.length} 条连接</span></div><div className={styles.nodes}>{sortedNodes.map((item) => <article key={item.id}><div><p>{item.category} · {item.level === "core" ? "核心" : item.level === "hub" ? "主节点" : "普通节点"}</p><h3>{item.name}</h3><span>{item.summary || "尚未填写简介"}</span></div><div><button onClick={() => edit(item)}>编辑</button><button className={styles.danger} onClick={() => removeNode(item.id)}>删除</button></div></article>)}</div></section>
+      <section className={`${styles.panel} ${styles.graphPanel}`}><div className={styles.listHead}><div><h2>图谱预览</h2><p>所有节点都在这里。点击任意节点，可直接编辑或删除。</p></div><span>{graph.nodes.length} 个节点 · {graph.links.length} 条连接</span></div><AdminGraphCanvas graph={graph} onEdit={edit} onDelete={removeNode} /></section>
     </div>
   </>;
 }
