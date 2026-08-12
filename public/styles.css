@@ -412,7 +412,7 @@
 /* Works Library image covers */
 .library-image{height:188px;overflow:hidden;border:0;border-radius:18px;background:#eceeed;box-shadow:none;filter:none}
 .library-image:before,.library-image:after{display:none!important}
-.library-image img{position:static!important;width:100%!important;height:100%!important;display:block!important;border:0!important;border-radius:0!important;object-fit:cover;box-shadow:none!important;filter:none;transform:none!important;transition:transform .55s ease,filter .4s ease}
+.library-image img{position:static!important;width:100%!important;height:100%!important;display:block!important;border:0!important;border-radius:0!important;object-fit:cover;image-rendering:auto!important;box-shadow:none!important;filter:none;transform:none!important;transition:transform .55s ease,filter .4s ease}
 .library-cover:hover .library-image{transform:none;box-shadow:none!important}
 .library-cover:hover .library-image img{transform:scale(1.035)!important;filter:brightness(.96)}
 .library-photo .library-image img{object-position:15% 35%}.library-graphic .library-image img{object-position:38% 28%}.library-space .library-image img{object-position:63% 38%}.library-ai .library-image img{object-position:82% 55%}.library-other .library-image img{object-position:50% 82%}

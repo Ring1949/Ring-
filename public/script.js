@@ -9,8 +9,15 @@ async function initHome() {
   document.querySelectorAll("[data-category-cover]").forEach((container) => {
     const category = categories.find((item) => item.slug === container.dataset.categoryCover);
     const image = container.querySelector("img");
-    image.onerror = () => { image.onerror = null; image.src = optimizedImagePath("/assets/archive-collage.png", 640, 72); };
-    image.src = optimizedImagePath(category?.cover_image || "/assets/archive-collage.png", 640, 72);
+    const cover = category?.cover_image || "/assets/archive-collage.png";
+    image.onerror = () => {
+      image.onerror = null;
+      image.srcset = responsiveImageSources("/assets/archive-collage.png");
+      image.src = optimizedImagePath("/assets/archive-collage.png", 1080, 88);
+    };
+    image.sizes = "(max-width: 600px) calc(100vw - 40px), (max-width: 900px) calc(50vw - 30px), 33vw";
+    image.srcset = responsiveImageSources(cover);
+    image.src = optimizedImagePath(cover, 1080, 88);
   });
   document.title = `${settings.site_name || "山川行止"} — 个人视觉档案`;
   document.querySelector("#hero-title").textContent = settings.hero_title || settings.site_name;

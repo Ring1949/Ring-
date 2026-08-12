@@ -14,6 +14,13 @@ function optimizedImagePath(path, width = 1080, quality = 76) {
   return `/_next/image?url=${encodeURIComponent(path)}&w=${width}&q=${quality}`;
 }
 
+function responsiveImageSources(path, widths = [640, 1080, 1920], quality = 88) {
+  if (!path || !String(path).startsWith("/") || /\.(svg|gif)$/i.test(String(path))) return "";
+  const source = String(path).startsWith("/_next/image") ? new URL(path, location.origin).searchParams.get("url") : path;
+  if (!source) return "";
+  return widths.map((width) => `${optimizedImagePath(source, width, quality)} ${width}w`).join(", ");
+}
+
 const mediaMarkup = (path, type = "image", alt = "", width = 1080) => {
   if (!path) return `<div class="media-placeholder"><span>${escapeHtml(alt).slice(0, 2) || "SC"}</span></div>`;
   if (type === "video") return `<video src="${escapeHtml(path)}" controls playsinline preload="metadata"></video>`;
