@@ -35,6 +35,7 @@ const heroMediaMarkup = (path, type = "image", alt = "") => {
 
 function setupNavigation(hero) {
   const nav = document.querySelector(".nav");
+  nav?.classList.add("site-nav");
   let heroHeight = hero ? innerHeight : 0;
   const heroObserver = hero && "ResizeObserver" in window ? new ResizeObserver((entries) => {
     const size = entries[0]?.borderBoxSize;
