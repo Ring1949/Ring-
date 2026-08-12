@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import PortfolioLibrary from "@/components/portfolio/PortfolioLibrary";
 
 // These experiences are only visible after user interaction. Keep their large
 // 3D and animation dependencies out of the homepage's initial JavaScript chunk.
@@ -9,6 +11,25 @@ const ContactLanyardOverlay = dynamic(() => import("@/components/contact/Contact
 
 export default function HomeInteractiveOverlays() {
   const [contactReady, setContactReady] = useState(false);
+  const [libraryHost, setLibraryHost] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const legacyLibrary = document.querySelector<HTMLElement>("#works-library");
+    if (legacyLibrary) {
+      const legacyChildren = [...legacyLibrary.children] as HTMLElement[];
+      legacyChildren.forEach((child) => { child.hidden = true; });
+      legacyLibrary.classList.add("portfolio-library-mounted");
+      const host = document.createElement("div");
+      host.id = "portfolio-library-react";
+      legacyLibrary.appendChild(host);
+      setLibraryHost(host);
+      return () => {
+        host.remove();
+        legacyLibrary.classList.remove("portfolio-library-mounted");
+        legacyChildren.forEach((child) => { child.hidden = false; });
+      };
+    }
+  }, []);
 
   useEffect(() => {
     const onContactClick = (event: MouseEvent) => {
@@ -23,5 +44,5 @@ export default function HomeInteractiveOverlays() {
     };
   }, [contactReady]);
 
-  return contactReady ? <ContactLanyardOverlay initialOpen /> : null;
+  return <>{libraryHost && createPortal(<PortfolioLibrary />, libraryHost)}{contactReady && <ContactLanyardOverlay initialOpen />}</>;
 }
