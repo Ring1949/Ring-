@@ -50,6 +50,44 @@ function setupNavigation(hero) {
   update();
   const button = document.querySelector(".menu-button");
   const links = document.querySelector(".nav-links");
+  if (links && !document.querySelector("#single-nav-indicator-style")) {
+    const indicatorStyle = document.createElement("style");
+    indicatorStyle.id = "single-nav-indicator-style";
+    indicatorStyle.textContent = ".nav-links a:not(.active):hover::after{content:none!important}";
+    document.head.appendChild(indicatorStyle);
+  }
+  const sectionLinks = [...(links?.querySelectorAll("a[href^='#']") || [])].map((link) => {
+    const hash = link.getAttribute("href") || "";
+    const section = hash === "#top" ? document.documentElement : document.querySelector(hash);
+    return section ? { link, hash, section } : null;
+  }).filter(Boolean);
+  let navigationIntent = "";
+  let navigationIntentTimer = 0;
+  const setActiveLink = (activeLink) => {
+    sectionLinks.forEach(({ link }) => {
+      const active = link === activeLink;
+      link.classList.toggle("active", active);
+      if (active) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  };
+  const syncActiveLink = () => {
+    if (!sectionLinks.length || navigationIntent) return;
+    const navHeight = nav?.getBoundingClientRect().height || 70;
+    const marker = window.scrollY + navHeight + Math.min(window.innerHeight * .22, 180);
+    let current = sectionLinks[0];
+    sectionLinks.forEach((entry) => {
+      const top = entry.hash === "#top" ? 0 : entry.section.getBoundingClientRect().top + window.scrollY;
+      if (top <= marker) current = entry;
+    });
+    setActiveLink(current.link);
+  };
+  const releaseNavigationIntent = () => {
+    if (!navigationIntent) return;
+    navigationIntent = "";
+    window.clearTimeout(navigationIntentTimer);
+    syncActiveLink();
+  };
   const closeMenu = () => {
     links?.classList.remove("open");
     button?.setAttribute("aria-expanded","false");
@@ -70,19 +108,37 @@ function setupNavigation(hero) {
     const centerOffset = sectionIds.has(section.id) ? Math.max(28, (viewport - Math.min(height, viewport)) / 2) : 24;
     window.scrollTo({ top: Math.max(0, top - navHeight - centerOffset), behavior });
   };
-  links?.querySelectorAll("a[href^='#']").forEach((link) => link.addEventListener("click", (event) => {
+  sectionLinks.forEach(({ link }) => link.addEventListener("click", (event) => {
     const hash = link.getAttribute("href") || "";
     const section = hash === "#top" ? document.documentElement : document.querySelector(hash);
     if (!section) return closeMenu();
     event.preventDefault();
     closeMenu();
+    navigationIntent = hash;
+    setActiveLink(link);
     alignSection(section);
     window.history.pushState(null, "", hash);
+    window.clearTimeout(navigationIntentTimer);
+    navigationIntentTimer = window.setTimeout(releaseNavigationIntent, 1400);
   }));
   if (location.hash) {
     const initial = location.hash === "#top" ? document.documentElement : document.querySelector(location.hash);
-    if (initial) requestAnimationFrame(() => alignSection(initial, "auto"));
+    const initialEntry = sectionLinks.find(({ hash }) => hash === location.hash);
+    if (initialEntry) setActiveLink(initialEntry.link);
+    if (initial) requestAnimationFrame(() => {
+      alignSection(initial, "auto");
+      syncActiveLink();
+    });
   }
+  addEventListener("scroll", syncActiveLink, { passive: true });
+  addEventListener("resize", syncActiveLink, { passive: true });
+  addEventListener("scrollend", releaseNavigationIntent, { passive: true });
+  addEventListener("hashchange", () => {
+    navigationIntent = "";
+    const entry = sectionLinks.find(({ hash }) => hash === location.hash) || sectionLinks[0];
+    if (entry) setActiveLink(entry.link);
+  });
+  syncActiveLink();
   document.addEventListener("keydown",(event)=>{if(event.key==="Escape")closeMenu();});
   document.addEventListener("click",(event)=>{
     if(!nav.contains(event.target))closeMenu();
