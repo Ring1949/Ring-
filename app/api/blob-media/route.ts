@@ -11,7 +11,7 @@ import {
   verifyUploadedBlob,
   type BlobMediaRecord
 } from "@/lib/blob-library";
-import { getRecoveredCategories, getRecoveredProjects } from "@/lib/recovered-data";
+import { basePortfolioCategories, basePortfolioProjects } from "@/lib/portfolio-state";
 import { requireAdmin } from "@/lib/utils";
 
 function mediaType(contentType: string) {
@@ -39,10 +39,10 @@ export async function POST(request: NextRequest) {
     const files = Array.isArray(body.files) ? body.files : [];
     if (!files.length) return NextResponse.json({ error: "请选择需要上传的文件。" }, { status: 400 });
     const maximumSize = Number(process.env.MEDIA_FILE_MAX_BYTES) || DEFAULT_MEDIA_MAX_BYTES;
-    const categories = getRecoveredCategories().filter((item: any) => item.slug !== "product");
+    const categories = basePortfolioCategories();
     const requestedCategory = categories.find((item: any) => String(item.id) === String(body.category_id));
     const category = requestedCategory || categories.find((item: any) => item.slug === "photo") || null;
-    const project = getRecoveredProjects().find((item: any) => String(item.id) === String(body.project_id)) || null;
+    const project = basePortfolioProjects().find((item: any) => String(item.id) === String(body.project_id)) || null;
     const verified = await Promise.all(files.map((file: any) => verifyUploadedBlob({
       url: String(file.url || ""),
       pathname: String(file.pathname || ""),
