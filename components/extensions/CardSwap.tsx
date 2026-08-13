@@ -34,6 +34,7 @@ type CardSwapProps = {
   verticalDistance?: number;
   delay?: number;
   pauseOnHover?: boolean;
+  wheelToSwap?: boolean;
   onCardClick?: (index: number) => void;
   skewAmount?: number;
   easing?: "elastic" | "smooth";
@@ -42,7 +43,7 @@ type CardSwapProps = {
 
 export default function CardSwap({
   width = 500, height = 400, cardDistance = 60, verticalDistance = 70,
-  delay = 5000, pauseOnHover = false, onCardClick, skewAmount = 6,
+  delay = 5000, pauseOnHover = false, wheelToSwap = false, onCardClick, skewAmount = 6,
   easing = "elastic", children
 }: CardSwapProps) {
   const config = easing === "elastic"
@@ -60,8 +61,29 @@ export default function CardSwap({
     order.current = Array.from({ length: total }, (_, index) => index);
     refs.forEach((ref, index) => placeNow(ref.current, makeSlot(index, cardDistance, verticalDistance, total), skewAmount));
 
-    const swap = () => {
+    const swap = (direction: 1 | -1 = 1) => {
       if (order.current.length < 2) return;
+      if (direction === -1) {
+        const back = order.current[order.current.length - 1];
+        const rest = order.current.slice(0, -1);
+        const backElement = refs[back].current;
+        if (!backElement) return;
+        timelineRef.current?.kill();
+        const timeline = gsap.timeline();
+        timelineRef.current = timeline;
+        timeline.set(backElement, { zIndex: total + 1 });
+        rest.forEach((index, position) => {
+          const element = refs[index].current;
+          if (!element) return;
+          const slot = makeSlot(position + 1, cardDistance, verticalDistance, total);
+          timeline.to(element, { x: slot.x, y: slot.y, z: slot.z, duration: config.durMove, ease: config.ease }, position * 0.08);
+          timeline.set(element, { zIndex: slot.zIndex }, position * 0.08);
+        });
+        const frontSlot = makeSlot(0, cardDistance, verticalDistance, total);
+        timeline.to(backElement, { x: frontSlot.x, y: frontSlot.y, z: frontSlot.z, duration: config.durReturn, ease: config.ease }, 0);
+        timeline.call(() => { order.current = [back, ...rest]; });
+        return;
+      }
       const [front, ...rest] = order.current;
       const frontElement = refs[front].current;
       if (!frontElement) return;
@@ -84,30 +106,42 @@ export default function CardSwap({
       timeline.call(() => { order.current = [...rest, front]; });
     };
 
-    const start = () => { intervalRef.current = window.setInterval(swap, delay); };
-    swap();
+    const start = () => { intervalRef.current = window.setInterval(() => swap(1), delay); };
+    swap(1);
     start();
     const node = container.current;
     const pause = () => { timelineRef.current?.pause(); window.clearInterval(intervalRef.current); };
     const resume = () => { timelineRef.current?.play(); window.clearInterval(intervalRef.current); start(); };
+    let lastWheelAt = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (!wheelToSwap || Math.abs(event.deltaY) < 4) return;
+      event.preventDefault();
+      const now = performance.now();
+      if (now - lastWheelAt < 520) return;
+      lastWheelAt = now;
+      timelineRef.current?.play();
+      swap(event.deltaY < 0 ? -1 : 1);
+    };
     if (pauseOnHover && node) {
       node.addEventListener("mouseenter", pause);
       node.addEventListener("mouseleave", resume);
       node.addEventListener("focusin", pause);
       node.addEventListener("focusout", resume);
     }
+    if (wheelToSwap && node) node.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       if (node) {
         node.removeEventListener("mouseenter", pause);
         node.removeEventListener("mouseleave", resume);
         node.removeEventListener("focusin", pause);
         node.removeEventListener("focusout", resume);
+        node.removeEventListener("wheel", onWheel);
       }
       window.clearInterval(intervalRef.current);
       timelineRef.current?.kill();
       refs.forEach((ref) => { if (ref.current) gsap.killTweensOf(ref.current); });
     };
-  }, [cardDistance, verticalDistance, delay, pauseOnHover, skewAmount, easing, refs, config.durDrop, config.durMove, config.durReturn, config.ease, config.promoteOverlap, config.returnDelay]);
+  }, [cardDistance, verticalDistance, delay, pauseOnHover, wheelToSwap, skewAmount, easing, refs, config.durDrop, config.durMove, config.durReturn, config.ease, config.promoteOverlap, config.returnDelay]);
 
   const rendered = childArr.map((child, index) => isValidElement<CardProps>(child)
     ? cloneElement(child, {

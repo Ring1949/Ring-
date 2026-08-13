@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import CardSwap, { Card } from "./CardSwap";
@@ -29,11 +28,10 @@ export default function HomeExtensions() {
       <h2>扩展</h2>
       <h3>不止于作品。</h3>
       <span>一些持续发生的实验、工具、数字项目、研究与未完成想法。</span>
-      <Link href="/extensions">查看全部扩展 <b aria-hidden="true">↗</b></Link>
       <small>CURRENT<br /><strong>{String(extensionProjects.length).padStart(2, "0")} PROJECTS</strong></small>
     </div>
     <div className={styles.stage} aria-label="扩展项目动态封面">
-      <CardSwap {...sizing} delay={5200} pauseOnHover easing="elastic" onCardClick={(index) => { const project = extensionProjects[index]; if (project) router.push(project.href); }}>
+      <CardSwap {...sizing} delay={5200} pauseOnHover wheelToSwap easing="elastic" onCardClick={(index) => { const project = extensionProjects[index]; if (project) router.push(project.href); }}>
         {extensionProjects.map((project) => <Card key={project.id} className={styles.card} role="link" tabIndex={0} aria-label={`进入${project.title}`} onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(project.href); }
         }}>
