@@ -4,3 +4,4 @@
 :global(:root[data-theme="dark"]) .intro>p{color:#c7b9ae}
 :global(:root[data-theme="dark"]) .intro h2{color:#f2f2ef}
 :global(:root[data-theme="dark"]) .intro span{color:#aeb1ad}
+.card{border:0;outline:0}
