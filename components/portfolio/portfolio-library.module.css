@@ -4,3 +4,4 @@
 :global(:root[data-theme="dark"]) .intro>p{color:#c7b9ae}
 :global(:root[data-theme="dark"]) .intro h2{color:#f2f2ef}
 :global(:root[data-theme="dark"]) .intro span{color:#aeb1ad}
+.glass{position:absolute!important;inset:0;width:100%!important;height:100%!important}.glassScene{position:relative;width:100%;height:100%;overflow:hidden;border-radius:calc(18px - .5rem)}.glassScene>img{position:absolute;z-index:0;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .6s cubic-bezier(.22,1,.36,1)}.card:hover .glassScene>img{transform:scale(1.025)}
