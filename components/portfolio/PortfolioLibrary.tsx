@@ -56,7 +56,6 @@ export default function PortfolioLibrary() {
                 <h3>{card.name}</h3>
                 <b>{card.english}</b>
                 <p>{card.description}</p>
-                <span aria-hidden="true">→</span>
               </div>
             </SpotlightCard>
           </a>
