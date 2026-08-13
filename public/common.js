@@ -224,7 +224,7 @@ function setupAdminLogin() {
 
 const languageDictionary = {
   "首页":"Home","系列作品":"Series","作品库":"Works","扩展":"Extensions","关于":"About","进入后台":"Admin",
-  "也许你会喜欢":"You may also like","进入更多系列 ↗":"More series ↗","我的作品库":"Works Library",
+  "也许你会喜欢":"You may also like","了解更多项目 →":"More projects →","我的作品库":"Works Library",
   "查看全部 ↗":"View all ↗","摄影":"Photography","平面":"Graphic",
   "空间":"Space","其他":"Other","一起做点什么 ↗":"Start a project ↗",
   "作品集":"Works","AI 小说工作室":"AI Novel Studio","本地小说生产与审核工作台。":"Local novel production and review workspace.","打开本地工作室 ↗":"Open local studio ↗","请先在本机启动 AI 小说工作室网页":"Start the AI Novel Studio webpage locally first.","登录":"Log in","输入四位密码":"Enter 4-digit password"
