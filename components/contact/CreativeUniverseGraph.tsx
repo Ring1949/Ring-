@@ -19,7 +19,7 @@ type PositionedNode = CreativeGraphNode & {
 
 type SnapEdge = "top" | "right" | "bottom" | "left";
 
-const EDGE_SNAP_DISTANCE = 58;
+const EDGE_SNAP_DISTANCE = 22;
 const CARD_LEFT_RATIO = 0.06;
 const CARD_RIGHT_RATIO = 0.94;
 const CARD_TOP_RATIO = 0.08;
@@ -51,14 +51,14 @@ function stablePositions(graph: CreativeGraphData) {
   core.forEach((node, index) => positions.set(node.id, { nx: 0.5 + index * 0.025, ny: 0.5 + index * 0.025 }));
   hubs.forEach((node, index) => {
     const angle = Math.PI * 2 * index / Math.max(hubs.length, 1) - Math.PI / 2;
-    positions.set(node.id, { nx: 0.5 + Math.cos(angle) * 0.265, ny: 0.5 + Math.sin(angle) * 0.265 });
+    positions.set(node.id, { nx: 0.5 + Math.cos(angle) * 0.255, ny: 0.495 + Math.sin(angle) * 0.245 });
   });
   orderedLeaves.forEach((node, index) => {
     const angle = Math.PI * 2 * index / Math.max(orderedLeaves.length, 1) - Math.PI / 2;
-    const alternatingRadius = index % 2 === 0 ? 0.405 : 0.45;
+    const outerRing = index % 2 !== 0;
     positions.set(node.id, {
-      nx: 0.5 + Math.cos(angle) * alternatingRadius,
-      ny: 0.5 + Math.sin(angle) * alternatingRadius,
+      nx: 0.5 + Math.cos(angle) * (outerRing ? 0.405 : 0.37),
+      ny: 0.495 + Math.sin(angle) * (outerRing ? 0.375 : 0.34),
     });
   });
   return positions;
@@ -97,6 +97,7 @@ export default function CreativeUniverseGraph() {
     let pointerStart = { x: 0, y: 0 };
     let latestPoint = { x: 0, y: 0 };
     let previousDragPoint = { x: 0, y: 0 };
+    let detachedEdge: SnapEdge | null = null;
     const positions = stablePositions(graph);
     const nodes: PositionedNode[] = graph.nodes.map((node) => {
       const position = positions.get(node.id) || { nx: 0.5, ny: 0.5 };
@@ -118,6 +119,34 @@ export default function CreativeUniverseGraph() {
       top: height * CARD_TOP_RATIO,
       bottom: height * CARD_BOTTOM_RATIO,
     });
+
+    const constrainInsideCard = (node: PositionedNode, point: { x: number; y: number }, requestedInset = node.radius + 3) => {
+      const bounds = cardBounds();
+      const inset = requestedInset;
+      let x = Math.min(bounds.right - inset, Math.max(bounds.left + inset, point.x));
+      let y = Math.min(bounds.bottom - inset, Math.max(bounds.top + inset, point.y));
+      const innerRadius = Math.max(1, CARD_CORNER_RADIUS - inset);
+      const cornerX = x < bounds.left + CARD_CORNER_RADIUS ? bounds.left + CARD_CORNER_RADIUS : x > bounds.right - CARD_CORNER_RADIUS ? bounds.right - CARD_CORNER_RADIUS : null;
+      const cornerY = y < bounds.top + CARD_CORNER_RADIUS ? bounds.top + CARD_CORNER_RADIUS : y > bounds.bottom - CARD_CORNER_RADIUS ? bounds.bottom - CARD_CORNER_RADIUS : null;
+      if (cornerX !== null && cornerY !== null) {
+        const dx = x - cornerX;
+        const dy = y - cornerY;
+        const distance = Math.max(1, Math.hypot(dx, dy));
+        if (distance > innerRadius) {
+          x = cornerX + dx / distance * innerRadius;
+          y = cornerY + dy / distance * innerRadius;
+        }
+      }
+      return { x, y };
+    };
+
+    const distanceToEdge = (point: { x: number; y: number }, edge: SnapEdge) => {
+      const bounds = cardBounds();
+      if (edge === "top") return Math.abs(point.y - bounds.top);
+      if (edge === "right") return Math.abs(point.x - bounds.right);
+      if (edge === "bottom") return Math.abs(point.y - bounds.bottom);
+      return Math.abs(point.x - bounds.left);
+    };
 
     const draw = () => {
       context.clearRect(0, 0, width, height);
@@ -207,8 +236,9 @@ export default function CreativeUniverseGraph() {
         const damping = Math.pow(0.84, delta);
         node.vx *= damping;
         node.vy *= damping;
-        node.x = Math.min(width - 28, Math.max(28, node.x + node.vx * delta));
-        node.y = Math.min(height - 28, Math.max(28, node.y + node.vy * delta));
+        const nextPoint = constrainInsideCard(node, { x: node.x + node.vx * delta, y: node.y + node.vy * delta });
+        node.x = nextPoint.x;
+        node.y = nextPoint.y;
         if (node.snappedEdge) {
           const bounds = cardBounds();
           if (node.snappedEdge === "top" || node.snappedEdge === "bottom") {
@@ -236,8 +266,11 @@ export default function CreativeUniverseGraph() {
       canvas.height = Math.round(height * density);
       context.setTransform(density, 0, 0, density, 0, 0);
       for (const node of nodes) {
-        node.x = Math.min(width - 28, Math.max(28, node.nx * width));
-        node.y = Math.min(height - 28, Math.max(28, node.ny * height));
+        const initialPoint = constrainInsideCard(node, { x: node.nx * width, y: node.ny * height });
+        node.x = initialPoint.x;
+        node.y = initialPoint.y;
+        node.nx = node.x / width;
+        node.ny = node.y / height;
         node.vx = 0;
         node.vy = 0;
       }
@@ -273,6 +306,7 @@ export default function CreativeUniverseGraph() {
       latestPoint = point;
       previousDragPoint = point;
       pressed = target;
+      detachedEdge = target.snappedEdge;
       target.snappedEdge = null;
       canvas.setPointerCapture(event.pointerId);
       canvas.style.cursor = "grab";
@@ -287,20 +321,14 @@ export default function CreativeUniverseGraph() {
         canvas.style.cursor = "grabbing";
       }
       if (dragging) {
-        const bounds = cardBounds();
         dragging.vx = (latestPoint.x - previousDragPoint.x) * 0.72;
         dragging.vy = (latestPoint.y - previousDragPoint.y) * 0.72;
+        if (detachedEdge && distanceToEdge(latestPoint, detachedEdge) > EDGE_SNAP_DISTANCE * 2) detachedEdge = null;
         snapEdge = dragging.level === "node" ? nearestEdge(latestPoint) : null;
-        dragging.x = Math.min(bounds.right, Math.max(bounds.left, latestPoint.x));
-        dragging.y = Math.min(bounds.bottom, Math.max(bounds.top, latestPoint.y));
-        if (snapEdge === "top" || snapEdge === "bottom") {
-          dragging.y = snapEdge === "top" ? bounds.top : bounds.bottom;
-          dragging.x = Math.min(bounds.right - CARD_CORNER_RADIUS, Math.max(bounds.left + CARD_CORNER_RADIUS, dragging.x));
-        }
-        if (snapEdge === "left" || snapEdge === "right") {
-          dragging.x = snapEdge === "left" ? bounds.left : bounds.right;
-          dragging.y = Math.min(bounds.bottom - CARD_CORNER_RADIUS, Math.max(bounds.top + CARD_CORNER_RADIUS, dragging.y));
-        }
+        if (detachedEdge && snapEdge === detachedEdge) snapEdge = null;
+        const dragPoint = constrainInsideCard(dragging, latestPoint);
+        dragging.x = dragPoint.x;
+        dragging.y = dragPoint.y;
         previousDragPoint = latestPoint;
         draw();
         return;
@@ -316,16 +344,32 @@ export default function CreativeUniverseGraph() {
           dragging.nx = dragging.x / width;
           dragging.ny = dragging.y / height;
         } else if (snapEdge) {
+          const bounds = cardBounds();
+          if (snapEdge === "top" || snapEdge === "bottom") {
+            dragging.y = snapEdge === "top" ? bounds.top : bounds.bottom;
+            dragging.x = Math.min(bounds.right - CARD_CORNER_RADIUS, Math.max(bounds.left + CARD_CORNER_RADIUS, dragging.x));
+          } else {
+            dragging.x = snapEdge === "left" ? bounds.left : bounds.right;
+            dragging.y = Math.min(bounds.bottom - CARD_CORNER_RADIUS, Math.max(bounds.top + CARD_CORNER_RADIUS, dragging.y));
+          }
           dragging.nx = dragging.x / width;
           dragging.ny = dragging.y / height;
           dragging.snappedEdge = snapEdge;
           dragging.vx = 0;
           dragging.vy = 0;
+        } else {
+          const settledPoint = constrainInsideCard(dragging, { x: dragging.x, y: dragging.y });
+          dragging.x = settledPoint.x;
+          dragging.y = settledPoint.y;
+          dragging.nx = dragging.x / width;
+          dragging.ny = dragging.y / height;
+          dragging.snappedEdge = null;
         }
       }
       pressed = null;
       dragging = null;
       snapEdge = null;
+      detachedEdge = null;
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       canvas.style.cursor = hovered && hovered.level !== "core" ? "grab" : "default";
       draw();
