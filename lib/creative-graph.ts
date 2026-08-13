@@ -7,6 +7,8 @@ export type CreativeGraphNode = {
   level: "core" | "hub" | "node";
   status: "active" | "planned";
   link?: string;
+  image?: string;
+  image_alt?: string;
 };
 
 export type CreativeGraphLink = { id: string; source: string; target: string };
@@ -73,7 +75,7 @@ export function validateCreativeGraph(input: unknown): CreativeGraphData {
     const name = String(item.name || "").trim();
     if (!id || !name || ids.has(id)) throw new Error("节点 ID 和名称不能为空，且 ID 不能重复。");
     ids.add(id);
-    return { id, name, category: String(item.category || "未分类").slice(0, 40), summary: String(item.summary || "").slice(0, 160), detail: String(item.detail || "").slice(0, 2000), level: ["core", "hub", "node"].includes(item.level) ? item.level : "node", status: item.status === "planned" ? "planned" : "active", ...(item.link ? { link: String(item.link).slice(0, 500) } : {}) } as CreativeGraphNode;
+    return { id, name, category: String(item.category || "未分类").slice(0, 40), summary: String(item.summary || "").slice(0, 160), detail: String(item.detail || "").slice(0, 5000), level: ["core", "hub", "node"].includes(item.level) ? item.level : "node", status: item.status === "planned" ? "planned" : "active", ...(item.link ? { link: String(item.link).slice(0, 500) } : {}), ...(item.image ? { image: String(item.image).slice(0, 2000) } : {}), ...(item.image_alt ? { image_alt: String(item.image_alt).slice(0, 200) } : {}) } as CreativeGraphNode;
   });
   const seenLinks = new Set<string>();
   const links = raw.links.map((item: any) => {
