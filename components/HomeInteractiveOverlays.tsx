@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import PortfolioLibrary from "@/components/portfolio/PortfolioLibrary";
+import HomeExtensions from "@/components/extensions/HomeExtensions";
 
 // These experiences are only visible after user interaction. Keep their large
 // 3D and animation dependencies out of the homepage's initial JavaScript chunk.
@@ -12,6 +13,7 @@ const ContactLanyardOverlay = dynamic(() => import("@/components/contact/Contact
 export default function HomeInteractiveOverlays() {
   const [contactReady, setContactReady] = useState(false);
   const [libraryHost, setLibraryHost] = useState<HTMLElement | null>(null);
+  const [extensionsHost, setExtensionsHost] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     const legacyLibrary = document.querySelector<HTMLElement>("#works-library");
@@ -32,6 +34,23 @@ export default function HomeInteractiveOverlays() {
   }, []);
 
   useEffect(() => {
+    const legacyExtensions = document.querySelector<HTMLElement>("#extensions");
+    if (!legacyExtensions) return;
+    const legacyChildren = [...legacyExtensions.children] as HTMLElement[];
+    legacyChildren.forEach((child) => { child.hidden = true; });
+    legacyExtensions.classList.add("home-extensions-mounted");
+    const host = document.createElement("div");
+    host.id = "home-extensions-react";
+    legacyExtensions.appendChild(host);
+    setExtensionsHost(host);
+    return () => {
+      host.remove();
+      legacyExtensions.classList.remove("home-extensions-mounted");
+      legacyChildren.forEach((child) => { child.hidden = false; });
+    };
+  }, []);
+
+  useEffect(() => {
     const onContactClick = (event: MouseEvent) => {
       if (contactReady || !(event.target as HTMLElement | null)?.closest("#contact-link")) return;
       event.preventDefault();
@@ -44,5 +63,5 @@ export default function HomeInteractiveOverlays() {
     };
   }, [contactReady]);
 
-  return <>{libraryHost && createPortal(<PortfolioLibrary />, libraryHost)}{contactReady && <ContactLanyardOverlay initialOpen />}</>;
+  return <>{libraryHost && createPortal(<PortfolioLibrary />, libraryHost)}{extensionsHost && createPortal(<HomeExtensions />, extensionsHost)}{contactReady && <ContactLanyardOverlay initialOpen />}</>;
 }
