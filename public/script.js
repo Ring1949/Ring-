@@ -38,7 +38,7 @@ async function initHome() {
     ["小红书",settings.xiaohongshu],["Instagram",settings.instagram],["Behance",settings.behance]
   ].filter(([,href]) => href);
   document.querySelector("#footer-links").innerHTML = [
-    `<a href="/series.html">系列作品</a>`,`<a href="/works.html?category=all">作品库</a>`,`<a href="#extensions">扩展</a>`,`<a href="#about">关于</a>`,
+    `<a href="/series.html">系列作品</a>`,`<a href="/works.html?category=all">作品库</a>`,`<a href="/extensions">扩展</a>`,`<a href="#about">关于</a>`,
     ...socialLinks.map(([label,href]) => `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${label}</a>`)
   ].join("");
   document.querySelector("#hero-media").innerHTML = heroMediaMarkup(hero.file_path, hero.media_type || hero.file_type || settings.hero_media_type, settings.site_name);
