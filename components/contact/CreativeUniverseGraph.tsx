@@ -16,6 +16,11 @@ type PositionedNode = CreativeGraphNode & {
   radius: number;
 };
 
+type SnapEdge = "top" | "right" | "bottom" | "left";
+
+const EDGE_PADDING = 28;
+const EDGE_SNAP_DISTANCE = 58;
+
 const radiusFor = (level: CreativeGraphNode["level"]) => level === "core" ? 10 : level === "hub" ? 6.5 : 3.5;
 
 function stablePositions(graph: CreativeGraphData) {
@@ -81,6 +86,7 @@ export default function CreativeUniverseGraph() {
     let hovered: PositionedNode | null = null;
     let pressed: PositionedNode | null = null;
     let dragging: PositionedNode | null = null;
+    let snapEdge: SnapEdge | null = null;
     let animationFrame = 0;
     let lastFrameTime = performance.now();
     let pointerStart = { x: 0, y: 0 };
@@ -105,6 +111,24 @@ export default function CreativeUniverseGraph() {
       context.clearRect(0, 0, width, height);
       const focus = (dragging || pressed || hovered)?.id || "";
       const related = focus ? neighbours.get(focus) : null;
+      if (dragging?.level === "node" && snapEdge) {
+        context.save();
+        context.beginPath();
+        if (snapEdge === "top" || snapEdge === "bottom") {
+          const y = snapEdge === "top" ? EDGE_PADDING : height - EDGE_PADDING;
+          context.moveTo(36, y);
+          context.lineTo(width - 36, y);
+        } else {
+          const x = snapEdge === "left" ? EDGE_PADDING : width - EDGE_PADDING;
+          context.moveTo(x, 36);
+          context.lineTo(x, height - 36);
+        }
+        context.strokeStyle = "rgba(255,93,54,.48)";
+        context.lineWidth = 2;
+        context.setLineDash([5, 7]);
+        context.stroke();
+        context.restore();
+      }
       for (const link of graph.links) {
         const source = nodeMap.get(link.source);
         const target = nodeMap.get(link.target);
@@ -204,10 +228,20 @@ export default function CreativeUniverseGraph() {
       return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
     };
     const hitNode = (point: { x: number; y: number }) => [...nodes].reverse().find((node) => Math.hypot(node.x - point.x, node.y - point.y) <= Math.max(20, node.radius + 12)) || null;
+    const nearestEdge = (point: { x: number; y: number }): SnapEdge | null => {
+      const distances: Array<[SnapEdge, number]> = [
+        ["top", point.y],
+        ["right", width - point.x],
+        ["bottom", height - point.y],
+        ["left", point.x],
+      ];
+      distances.sort((a, b) => a[1] - b[1]);
+      return distances[0][1] <= EDGE_SNAP_DISTANCE ? distances[0][0] : null;
+    };
     const onPointerDown = (event: PointerEvent) => {
       const point = localPoint(event);
       const target = hitNode(point);
-      if (!target || target.level !== "node") return;
+      if (!target || target.level === "core") return;
       event.preventDefault();
       pointerStart = point;
       latestPoint = point;
@@ -228,22 +262,39 @@ export default function CreativeUniverseGraph() {
       if (dragging) {
         dragging.vx = (latestPoint.x - previousDragPoint.x) * 0.72;
         dragging.vy = (latestPoint.y - previousDragPoint.y) * 0.72;
-        dragging.x = Math.min(width - 28, Math.max(28, latestPoint.x));
-        dragging.y = Math.min(height - 28, Math.max(28, latestPoint.y));
+        snapEdge = dragging.level === "node" ? nearestEdge(latestPoint) : null;
+        dragging.x = Math.min(width - EDGE_PADDING, Math.max(EDGE_PADDING, latestPoint.x));
+        dragging.y = Math.min(height - EDGE_PADDING, Math.max(EDGE_PADDING, latestPoint.y));
+        if (snapEdge === "top") dragging.y = EDGE_PADDING;
+        if (snapEdge === "right") dragging.x = width - EDGE_PADDING;
+        if (snapEdge === "bottom") dragging.y = height - EDGE_PADDING;
+        if (snapEdge === "left") dragging.x = EDGE_PADDING;
         previousDragPoint = latestPoint;
         draw();
         return;
       }
       hovered = hitNode(latestPoint);
-      canvas.style.cursor = hovered?.level === "node" ? "pointer" : "default";
+      canvas.style.cursor = hovered && hovered.level !== "core" ? "grab" : "default";
       draw();
     };
     const finishPointer = (event: PointerEvent, cancelled = false) => {
-      if (!cancelled && pressed) setSelected({ ...pressed });
+      if (!cancelled && pressed?.level === "node") setSelected({ ...pressed });
+      if (!cancelled && dragging) {
+        if (dragging.level === "hub") {
+          dragging.nx = dragging.x / width;
+          dragging.ny = dragging.y / height;
+        } else if (snapEdge) {
+          dragging.nx = dragging.x / width;
+          dragging.ny = dragging.y / height;
+          dragging.vx = 0;
+          dragging.vy = 0;
+        }
+      }
       pressed = null;
       dragging = null;
+      snapEdge = null;
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      canvas.style.cursor = hovered?.level === "node" ? "pointer" : "default";
+      canvas.style.cursor = hovered && hovered.level !== "core" ? "grab" : "default";
       draw();
     };
     const onPointerUp = (event: PointerEvent) => finishPointer(event);
@@ -289,8 +340,8 @@ export default function CreativeUniverseGraph() {
 
   return (
     <div className={styles.graphShell}>
-      <canvas ref={canvasRef} className={styles.graphCanvas} aria-label="RING 创作宇宙关系图谱；点击第三级节点查看详情，按住即可拖动" />
-      <div className={styles.graphGestureHint}>点击查看详情 · 按住即可拖动</div>
+      <canvas ref={canvasRef} className={styles.graphCanvas} aria-label="RING 创作宇宙关系图谱；二三级节点可拖动，第三级节点可吸附边缘" />
+      <div className={styles.graphGestureHint}>二三级可拖动 · 三级靠边自动吸附</div>
       {detail}
     </div>
   );
