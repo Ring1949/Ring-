@@ -12,13 +12,67 @@ export type CreativeGraphNode = {
 };
 
 export type CreativeGraphLink = { id: string; source: string; target: string };
-export type CreativeGraphData = { version: number; updated_at: string; nodes: CreativeGraphNode[]; links: CreativeGraphLink[] };
+export type CreativeGraphData = { version: number; data_revision: number; updated_at: string; nodes: CreativeGraphNode[]; links: CreativeGraphLink[] };
 
 const node = (id: string, name: string, category: string, summary: string, detail: string, level: CreativeGraphNode["level"] = "node", status: CreativeGraphNode["status"] = "active", link = ""): CreativeGraphNode => ({ id, name, category, summary, detail, level, status, ...(link ? { link } : {}) });
 const edge = (source: string, target: string): CreativeGraphLink => ({ id: `${source}--${target}`, source, target });
 
+const restoredNode = (id: string, name: string, category: string, summary: string): CreativeGraphNode =>
+  node(id, name, category, summary, `${summary}。这是原关系图谱中保留的内容节点，可在后台继续补充文字、图片和链接。`);
+
+const restoredNodes: CreativeGraphNode[] = [
+  restoredNode("ai-tech", "AI与技术", "技术", "AI 技术方向与实践索引"),
+  restoredNode("photo-film", "摄影与影视", "视觉", "摄影、影像与视频创作方向"),
+  restoredNode("ai-app", "AI应用开发", "技术", "把模型能力做成可以使用的产品"),
+  restoredNode("prompts", "Prompt素材库", "技术", "提示词、范例与模型交互素材"),
+  restoredNode("game-cs2", "CS2", "游戏", "竞技射击与团队协作体验"),
+  restoredNode("photo-davinci", "DaVinci调色", "视觉", "影像调色与后期工作流"),
+  restoredNode("game-gta5", "GTA5", "游戏", "开放世界与城市体验"),
+  restoredNode("game-inside", "INSIDE", "游戏", "氛围叙事与关卡体验"),
+  restoredNode("game-pubg", "PUBG", "游戏", "战术竞技与多人协作"),
+  restoredNode("photo-contest", "参加摄影比赛", "视觉", "摄影作品整理与公开投稿"),
+  restoredNode("geography", "地理", "知识", "地点、空间与自然环境观察"),
+  restoredNode("game-limbo", "地狱边境 Limbo", "游戏", "黑白美术与环境叙事"),
+  restoredNode("web-development", "网站开发", "技术", "个人网站的开发、维护与发布"),
+  restoredNode("personal-knowledge", "个人知识库", "知识", "个人资料、方法与长期知识沉淀"),
+  restoredNode("portfolio-design", "作品集设计", "作品", "作品选择、编排与展示方式"),
+  restoredNode("game-sky", "光遇 Sky", "游戏", "社交探索与情绪化视觉体验"),
+  restoredNode("game-forza4", "极限竞速：地平线4", "游戏", "开放世界驾驶与汽车文化"),
+  restoredNode("game-forza-series", "极限竞速：地平线系列", "游戏", "地平线系列的驾驶与场景体验"),
+  restoredNode("photo-architecture", "建筑摄影", "视觉", "建筑、结构与空间秩序"),
+  restoredNode("inspiration-library", "灵感库", "知识", "跨项目灵感与参考资料"),
+  restoredNode("game-luoke", "洛克王国", "游戏", "养成、探索与童年数字记忆"),
+  restoredNode("game-travel-frog", "旅行青蛙", "游戏", "轻量收集与旅行叙事"),
+  restoredNode("game-left4dead", "求生之路 Left 4 Dead", "游戏", "合作生存与关卡节奏"),
+  restoredNode("game-delta", "三角洲行动", "游戏", "战术射击与多人行动"),
+  restoredNode("game-forest-son", "森林之子 Sons of the Forest", "游戏", "生存建造与多人探索"),
+  restoredNode("photo-landscape", "风光摄影", "视觉", "自然景观、光线与地点观察"),
+  restoredNode("documentary-video", "纪录片拍摄", "视觉", "真实人物与事件的连续影像记录"),
+  restoredNode("travel", "旅行", "生活", "地点体验、路线与途中观察"),
+  restoredNode("visual-china", "签约视觉中国", "职业", "摄影作品的图库签约与商业发布"),
+  restoredNode("astro-timelapse", "星空延时", "视觉", "夜空拍摄与延时影像"),
+  restoredNode("game-it-takes-two", "双人成行", "游戏", "双人合作与互动叙事"),
+  restoredNode("astro-photo", "天文摄影", "视觉", "星空与天体的影像记录"),
+  restoredNode("game-civ6", "文明6 Civilization VI", "游戏", "文明发展与策略系统"),
+  restoredNode("game-valorant", "无畏契约 Valorant", "游戏", "角色技能与战术竞技"),
+  restoredNode("game-little-nightmares", "小小梦魇 Little Nightmares", "游戏", "暗黑童话与环境叙事"),
+  restoredNode("game-stardew", "星露谷物语 Stardew Valley", "游戏", "经营、社区与日常节奏"),
+  restoredNode("film-book-list", "影视和书籍总清单维护", "知识", "影视与阅读资料的长期索引"),
+  restoredNode("game-goose", "鹅鸭杀", "游戏", "多人社交推理"),
+  restoredNode("game-moving-out", "胡闹搬家 Moving Out", "游戏", "多人协作与派对玩法"),
+  restoredNode("game-hogwarts", "霍格沃茨之遗 Hogwarts Legacy", "游戏", "魔法世界探索与叙事"),
+  restoredNode("game-monument", "纪念碑谷 Monument Valley", "游戏", "空间错觉与视觉解谜"),
+  restoredNode("game-party-animals", "猛兽派对", "游戏", "物理互动与多人派对"),
+  restoredNode("game-ball", "球球大作战", "游戏", "轻量竞技与成长机制"),
+  restoredNode("game-snake", "贪吃蛇大作战", "游戏", "轻量竞技与经典机制"),
+  restoredNode("game-king", "王者荣耀", "游戏", "多人竞技与角色协作"),
+  restoredNode("game-battlefield1", "战地1", "游戏", "历史战争场景与多人对战"),
+  restoredNode("project-template", "项目模板", "系统", "新项目的结构与复用模板")
+];
+
 export const defaultCreativeGraph: CreativeGraphData = {
   version: 1,
+  data_revision: 2,
   updated_at: "2026-08-12T00:00:00.000Z",
   nodes: [
     node("control", "00-总控台", "核心", "创作宇宙的中心入口", "连接作品、技术、职业、知识与生活方向，负责汇总当前项目和长期计划。", "core"),
@@ -47,11 +101,12 @@ export const defaultCreativeGraph: CreativeGraphData = {
     node("photo-documentary", "纪实摄影", "视觉", "社会现场与公共生活", "通过连续观察和影像记录建立具有语境的故事。"),
     node("photo-travel", "旅行记录", "视觉", "地点、自然与途中观察", "用影像保存旅行中的空间、人物和情绪。"),
     node("game-minecraft", "我的世界 Minecraft", "游戏", "建造与开放世界", "长期的数字建造、探索和多人协作兴趣。"),
-    node("game-cities", "城市：天际线", "游戏", "城市系统与空间规划", "从交通、分区和公共服务理解复杂城市系统。"),
+    node("game-cities", "城市：天际线 Cities - Skylines", "游戏", "城市系统与空间规划", "从交通、分区和公共服务理解复杂城市系统。"),
     node("game-forest", "森林 The Forest", "游戏", "生存、建造与协作", "关注环境叙事、资源循环和多人协作体验。"),
     node("books", "书籍库", "知识", "阅读记录和主题索引", "保存值得复看、引用和延伸研究的书籍。"),
     node("images", "图片素材库", "知识", "视觉参考与图片资料", "按用途、主题和项目整理可复用的视觉素材。"),
-    node("film", "电影库", "知识", "影像作品与叙事参考", "记录电影、镜头、声音和世界观方面的观察。")
+    node("film", "电影库", "知识", "影像作品与叙事参考", "记录电影、镜头、声音和世界观方面的观察。"),
+    ...restoredNodes
   ],
   links: [
     edge("control", "ai"), edge("control", "portfolio"), edge("control", "website"), edge("control", "photography"), edge("control", "games"), edge("control", "knowledge"), edge("control", "career"), edge("control", "writing"), edge("control", "visual"), edge("control", "life"), edge("control", "language"), edge("control", "nature"), edge("control", "materials"), edge("control", "review"), edge("control", "inbox"), edge("control", "jobs"), edge("control", "publish"),
@@ -60,7 +115,20 @@ export const defaultCreativeGraph: CreativeGraphData = {
     edge("photography", "photo-product"), edge("photography", "photo-portrait"), edge("photography", "photo-documentary"), edge("photography", "photo-travel"), edge("photography", "nature"),
     edge("games", "game-minecraft"), edge("games", "game-cities"), edge("games", "game-forest"), edge("games", "life"),
     edge("knowledge", "books"), edge("knowledge", "images"), edge("knowledge", "film"), edge("knowledge", "skills"), edge("knowledge", "materials"),
-    edge("career", "jobs"), edge("career", "portfolio"), edge("review", "inbox"), edge("review", "publish")
+    edge("career", "jobs"), edge("career", "portfolio"), edge("review", "inbox"), edge("review", "publish"),
+    edge("control", "ai-tech"), edge("control", "photo-film"),
+    edge("ai", "ai-app"), edge("ai", "ai-tech"), edge("ai", "prompts"), edge("ai", "portfolio"), edge("ai", "jobs"), edge("ai", "knowledge"), edge("ai", "review"),
+    edge("games", "game-cs2"), edge("photography", "photo-davinci"), edge("games", "game-gta5"), edge("games", "game-inside"), edge("knowledge", "prompts"), edge("games", "game-pubg"),
+    edge("photography", "photo-contest"), edge("photography", "geography"), edge("games", "game-limbo"),
+    edge("website", "jobs"), edge("website", "photography"), edge("website", "web-development"), edge("website", "review"), edge("knowledge", "personal-knowledge"),
+    edge("portfolio", "inbox"), edge("portfolio", "publish"), edge("portfolio", "review"), edge("portfolio", "portfolio-design"),
+    edge("games", "game-sky"), edge("games", "game-forza4"), edge("games", "game-forza-series"), edge("photography", "photo-architecture"), edge("knowledge", "inspiration-library"),
+    edge("games", "game-luoke"), edge("games", "game-travel-frog"), edge("games", "game-left4dead"), edge("games", "game-delta"), edge("games", "game-forest-son"),
+    edge("photography", "photo-landscape"), edge("photography", "documentary-video"), edge("photography", "travel"), edge("photography", "visual-china"), edge("photography", "jobs"), edge("photography", "astro-timelapse"),
+    edge("games", "game-it-takes-two"), edge("photography", "astro-photo"), edge("publish", "inbox"),
+    edge("games", "game-civ6"), edge("games", "game-valorant"), edge("games", "game-little-nightmares"), edge("games", "game-stardew"), edge("knowledge", "film-book-list"),
+    edge("games", "game-goose"), edge("games", "game-moving-out"), edge("games", "game-hogwarts"), edge("games", "game-monument"), edge("games", "game-party-animals"), edge("games", "game-ball"), edge("games", "game-snake"), edge("games", "game-king"), edge("games", "game-battlefield1"),
+    edge("review", "jobs"), edge("review", "photography"), edge("review", "knowledge")
   ]
 };
 
@@ -86,5 +154,31 @@ export function validateCreativeGraph(input: unknown): CreativeGraphData {
     seenLinks.add(key);
     return { id: String(item.id || key), source, target };
   });
-  return { version: Math.max(1, Number(raw.version) || 1), updated_at: String(raw.updated_at || new Date().toISOString()), nodes, links };
+  return { version: Math.max(1, Number(raw.version) || 1), data_revision: Math.max(1, Number(raw.data_revision) || 1), updated_at: String(raw.updated_at || new Date().toISOString()), nodes, links };
+}
+
+export function upgradeCreativeGraph(input: unknown): CreativeGraphData {
+  const graph = validateCreativeGraph(input);
+  if (graph.data_revision >= defaultCreativeGraph.data_revision) return graph;
+
+  const nodes = [...graph.nodes];
+  const nodeIds = new Set(nodes.map((item) => item.id));
+  for (const item of defaultCreativeGraph.nodes) {
+    if (!nodeIds.has(item.id)) {
+      nodes.push(item);
+      nodeIds.add(item.id);
+    }
+  }
+
+  const links = [...graph.links];
+  const linkKeys = new Set(links.map((item) => [item.source, item.target].sort().join("--")));
+  for (const item of defaultCreativeGraph.links) {
+    const key = [item.source, item.target].sort().join("--");
+    if (!linkKeys.has(key) && nodeIds.has(item.source) && nodeIds.has(item.target)) {
+      links.push(item);
+      linkKeys.add(key);
+    }
+  }
+
+  return { ...graph, data_revision: defaultCreativeGraph.data_revision, nodes, links };
 }

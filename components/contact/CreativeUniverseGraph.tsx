@@ -14,12 +14,17 @@ type PositionedNode = CreativeGraphNode & {
   vx: number;
   vy: number;
   radius: number;
+  snappedEdge: SnapEdge | null;
 };
 
 type SnapEdge = "top" | "right" | "bottom" | "left";
 
-const EDGE_PADDING = 28;
 const EDGE_SNAP_DISTANCE = 58;
+const CARD_LEFT_RATIO = 0.06;
+const CARD_RIGHT_RATIO = 0.94;
+const CARD_TOP_RATIO = 0.08;
+const CARD_BOTTOM_RATIO = 0.91;
+const CARD_CORNER_RADIUS = 32;
 
 const radiusFor = (level: CreativeGraphNode["level"]) => level === "core" ? 10 : level === "hub" ? 6.5 : 3.5;
 
@@ -95,7 +100,7 @@ export default function CreativeUniverseGraph() {
     const positions = stablePositions(graph);
     const nodes: PositionedNode[] = graph.nodes.map((node) => {
       const position = positions.get(node.id) || { nx: 0.5, ny: 0.5 };
-      return { ...node, ...position, x: 0, y: 0, vx: 0, vy: 0, radius: radiusFor(node.level) };
+      return { ...node, ...position, x: 0, y: 0, vx: 0, vy: 0, radius: radiusFor(node.level), snappedEdge: null };
     });
     const nodeMap = new Map(nodes.map((node) => [node.id, node]));
     const linkRestLengths = new Map<string, number>();
@@ -107,21 +112,29 @@ export default function CreativeUniverseGraph() {
       neighbours.get(link.target)?.add(link.source);
     }
 
+    const cardBounds = () => ({
+      left: width * CARD_LEFT_RATIO,
+      right: width * CARD_RIGHT_RATIO,
+      top: height * CARD_TOP_RATIO,
+      bottom: height * CARD_BOTTOM_RATIO,
+    });
+
     const draw = () => {
       context.clearRect(0, 0, width, height);
       const focus = (dragging || pressed || hovered)?.id || "";
       const related = focus ? neighbours.get(focus) : null;
       if (dragging?.level === "node" && snapEdge) {
+        const bounds = cardBounds();
         context.save();
         context.beginPath();
         if (snapEdge === "top" || snapEdge === "bottom") {
-          const y = snapEdge === "top" ? EDGE_PADDING : height - EDGE_PADDING;
-          context.moveTo(36, y);
-          context.lineTo(width - 36, y);
+          const y = snapEdge === "top" ? bounds.top : bounds.bottom;
+          context.moveTo(bounds.left + CARD_CORNER_RADIUS, y);
+          context.lineTo(bounds.right - CARD_CORNER_RADIUS, y);
         } else {
-          const x = snapEdge === "left" ? EDGE_PADDING : width - EDGE_PADDING;
-          context.moveTo(x, 36);
-          context.lineTo(x, height - 36);
+          const x = snapEdge === "left" ? bounds.left : bounds.right;
+          context.moveTo(x, bounds.top + CARD_CORNER_RADIUS);
+          context.lineTo(x, bounds.bottom - CARD_CORNER_RADIUS);
         }
         context.strokeStyle = "rgba(255,93,54,.48)";
         context.lineWidth = 2;
@@ -196,6 +209,18 @@ export default function CreativeUniverseGraph() {
         node.vy *= damping;
         node.x = Math.min(width - 28, Math.max(28, node.x + node.vx * delta));
         node.y = Math.min(height - 28, Math.max(28, node.y + node.vy * delta));
+        if (node.snappedEdge) {
+          const bounds = cardBounds();
+          if (node.snappedEdge === "top" || node.snappedEdge === "bottom") {
+            node.y = node.snappedEdge === "top" ? bounds.top : bounds.bottom;
+            node.x = Math.min(bounds.right - CARD_CORNER_RADIUS, Math.max(bounds.left + CARD_CORNER_RADIUS, node.x));
+            node.vy = 0;
+          } else {
+            node.x = node.snappedEdge === "left" ? bounds.left : bounds.right;
+            node.y = Math.min(bounds.bottom - CARD_CORNER_RADIUS, Math.max(bounds.top + CARD_CORNER_RADIUS, node.y));
+            node.vx = 0;
+          }
+        }
       }
 
       draw();
@@ -229,11 +254,12 @@ export default function CreativeUniverseGraph() {
     };
     const hitNode = (point: { x: number; y: number }) => [...nodes].reverse().find((node) => Math.hypot(node.x - point.x, node.y - point.y) <= Math.max(20, node.radius + 12)) || null;
     const nearestEdge = (point: { x: number; y: number }): SnapEdge | null => {
+      const bounds = cardBounds();
       const distances: Array<[SnapEdge, number]> = [
-        ["top", point.y],
-        ["right", width - point.x],
-        ["bottom", height - point.y],
-        ["left", point.x],
+        ["top", Math.abs(point.y - bounds.top)],
+        ["right", Math.abs(point.x - bounds.right)],
+        ["bottom", Math.abs(point.y - bounds.bottom)],
+        ["left", Math.abs(point.x - bounds.left)],
       ];
       distances.sort((a, b) => a[1] - b[1]);
       return distances[0][1] <= EDGE_SNAP_DISTANCE ? distances[0][0] : null;
@@ -247,6 +273,7 @@ export default function CreativeUniverseGraph() {
       latestPoint = point;
       previousDragPoint = point;
       pressed = target;
+      target.snappedEdge = null;
       canvas.setPointerCapture(event.pointerId);
       canvas.style.cursor = "grab";
       draw();
@@ -260,15 +287,20 @@ export default function CreativeUniverseGraph() {
         canvas.style.cursor = "grabbing";
       }
       if (dragging) {
+        const bounds = cardBounds();
         dragging.vx = (latestPoint.x - previousDragPoint.x) * 0.72;
         dragging.vy = (latestPoint.y - previousDragPoint.y) * 0.72;
         snapEdge = dragging.level === "node" ? nearestEdge(latestPoint) : null;
-        dragging.x = Math.min(width - EDGE_PADDING, Math.max(EDGE_PADDING, latestPoint.x));
-        dragging.y = Math.min(height - EDGE_PADDING, Math.max(EDGE_PADDING, latestPoint.y));
-        if (snapEdge === "top") dragging.y = EDGE_PADDING;
-        if (snapEdge === "right") dragging.x = width - EDGE_PADDING;
-        if (snapEdge === "bottom") dragging.y = height - EDGE_PADDING;
-        if (snapEdge === "left") dragging.x = EDGE_PADDING;
+        dragging.x = Math.min(bounds.right, Math.max(bounds.left, latestPoint.x));
+        dragging.y = Math.min(bounds.bottom, Math.max(bounds.top, latestPoint.y));
+        if (snapEdge === "top" || snapEdge === "bottom") {
+          dragging.y = snapEdge === "top" ? bounds.top : bounds.bottom;
+          dragging.x = Math.min(bounds.right - CARD_CORNER_RADIUS, Math.max(bounds.left + CARD_CORNER_RADIUS, dragging.x));
+        }
+        if (snapEdge === "left" || snapEdge === "right") {
+          dragging.x = snapEdge === "left" ? bounds.left : bounds.right;
+          dragging.y = Math.min(bounds.bottom - CARD_CORNER_RADIUS, Math.max(bounds.top + CARD_CORNER_RADIUS, dragging.y));
+        }
         previousDragPoint = latestPoint;
         draw();
         return;
@@ -286,6 +318,7 @@ export default function CreativeUniverseGraph() {
         } else if (snapEdge) {
           dragging.nx = dragging.x / width;
           dragging.ny = dragging.y / height;
+          dragging.snappedEdge = snapEdge;
           dragging.vx = 0;
           dragging.vy = 0;
         }

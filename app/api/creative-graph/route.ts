@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { defaultCreativeGraph, validateCreativeGraph } from "@/lib/creative-graph";
+import { defaultCreativeGraph, upgradeCreativeGraph, validateCreativeGraph } from "@/lib/creative-graph";
 import { setSettings } from "@/lib/db";
 import { getSupabaseServer } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/utils";
@@ -14,7 +14,7 @@ export async function GET() {
     const { data, error } = await getSupabaseServer().from("settings").select("value").eq("key", SETTINGS_KEY).maybeSingle();
     if (error) throw error;
     const saved = data?.value;
-    const graph = saved ? validateCreativeGraph(JSON.parse(saved)) : defaultCreativeGraph;
+    const graph = saved ? upgradeCreativeGraph(JSON.parse(saved)) : defaultCreativeGraph;
     return NextResponse.json(graph, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } });
   } catch {
     return NextResponse.json(defaultCreativeGraph, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } });
