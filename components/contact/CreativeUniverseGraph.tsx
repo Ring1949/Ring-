@@ -11,8 +11,9 @@ type PositionedNode = CreativeGraphNode & {
   y: number;
   nx: number;
   ny: number;
+  vx: number;
+  vy: number;
   radius: number;
-  pinned: boolean;
 };
 
 const radiusFor = (level: CreativeGraphNode["level"]) => level === "core" ? 10 : level === "hub" ? 6.5 : 3.5;
@@ -80,14 +81,18 @@ export default function CreativeUniverseGraph() {
     let hovered: PositionedNode | null = null;
     let pressed: PositionedNode | null = null;
     let dragging: PositionedNode | null = null;
-    let pressTimer = 0;
+    let animationFrame = 0;
+    let lastFrameTime = performance.now();
+    let pointerStart = { x: 0, y: 0 };
     let latestPoint = { x: 0, y: 0 };
+    let previousDragPoint = { x: 0, y: 0 };
     const positions = stablePositions(graph);
     const nodes: PositionedNode[] = graph.nodes.map((node) => {
       const position = positions.get(node.id) || { nx: 0.5, ny: 0.5 };
-      return { ...node, ...position, x: 0, y: 0, radius: radiusFor(node.level), pinned: false };
+      return { ...node, ...position, x: 0, y: 0, vx: 0, vy: 0, radius: radiusFor(node.level) };
     });
     const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+    const linkRestLengths = new Map<string, number>();
     const neighbours = new Map<string, Set<string>>();
     for (const link of graph.links) {
       if (!neighbours.has(link.source)) neighbours.set(link.source, new Set());
@@ -132,6 +137,47 @@ export default function CreativeUniverseGraph() {
       }
     };
 
+    const animate = (time: number) => {
+      const delta = Math.min(2, Math.max(0.45, (time - lastFrameTime) / 16.667));
+      lastFrameTime = time;
+
+      for (const link of graph.links) {
+        const source = nodeMap.get(link.source);
+        const target = nodeMap.get(link.target);
+        if (!source || !target) continue;
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const distance = Math.max(Math.hypot(dx, dy), 1);
+        const restLength = linkRestLengths.get(link.id) || distance;
+        const spring = (distance - restLength) * 0.0026 * delta;
+        if (source !== dragging) {
+          source.vx += dx / distance * spring;
+          source.vy += dy / distance * spring;
+        }
+        if (target !== dragging) {
+          target.vx -= dx / distance * spring;
+          target.vy -= dy / distance * spring;
+        }
+      }
+
+      for (const node of nodes) {
+        if (node === dragging) continue;
+        const anchorX = node.nx * width;
+        const anchorY = node.ny * height;
+        const anchorStrength = node.level === "core" ? 0.032 : node.level === "hub" ? 0.024 : 0.018;
+        node.vx += (anchorX - node.x) * anchorStrength * delta;
+        node.vy += (anchorY - node.y) * anchorStrength * delta;
+        const damping = Math.pow(0.84, delta);
+        node.vx *= damping;
+        node.vy *= damping;
+        node.x = Math.min(width - 28, Math.max(28, node.x + node.vx * delta));
+        node.y = Math.min(height - 28, Math.max(28, node.y + node.vy * delta));
+      }
+
+      draw();
+      animationFrame = requestAnimationFrame(animate);
+    };
+
     const layout = () => {
       const bounds = canvas.getBoundingClientRect();
       const density = Math.min(window.devicePixelRatio || 1, 2);
@@ -143,6 +189,13 @@ export default function CreativeUniverseGraph() {
       for (const node of nodes) {
         node.x = Math.min(width - 28, Math.max(28, node.nx * width));
         node.y = Math.min(height - 28, Math.max(28, node.ny * height));
+        node.vx = 0;
+        node.vy = 0;
+      }
+      for (const link of graph.links) {
+        const source = nodeMap.get(link.source);
+        const target = nodeMap.get(link.target);
+        if (source && target) linkRestLengths.set(link.id, Math.hypot(target.x - source.x, target.y - source.y));
       }
       draw();
     };
@@ -151,36 +204,33 @@ export default function CreativeUniverseGraph() {
       return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
     };
     const hitNode = (point: { x: number; y: number }) => [...nodes].reverse().find((node) => Math.hypot(node.x - point.x, node.y - point.y) <= Math.max(20, node.radius + 12)) || null;
-    const clearTimer = () => { if (pressTimer) window.clearTimeout(pressTimer); pressTimer = 0; };
     const onPointerDown = (event: PointerEvent) => {
-      const target = hitNode(localPoint(event));
+      const point = localPoint(event);
+      const target = hitNode(point);
       if (!target || target.level !== "node") return;
       event.preventDefault();
-      latestPoint = localPoint(event);
+      pointerStart = point;
+      latestPoint = point;
+      previousDragPoint = point;
       pressed = target;
       canvas.setPointerCapture(event.pointerId);
-      clearTimer();
-      pressTimer = window.setTimeout(() => {
-        if (!pressed) return;
-        dragging = pressed;
-        pressed = null;
-        dragging.x = latestPoint.x;
-        dragging.y = latestPoint.y;
-        dragging.nx = dragging.x / width;
-        dragging.ny = dragging.y / height;
-        canvas.style.cursor = "grabbing";
-        draw();
-      }, 300);
+      canvas.style.cursor = "grab";
       draw();
     };
     const onPointerMove = (event: PointerEvent) => {
       latestPoint = localPoint(event);
+      if (pressed && Math.hypot(latestPoint.x - pointerStart.x, latestPoint.y - pointerStart.y) >= 3) {
+        dragging = pressed;
+        pressed = null;
+        previousDragPoint = pointerStart;
+        canvas.style.cursor = "grabbing";
+      }
       if (dragging) {
+        dragging.vx = (latestPoint.x - previousDragPoint.x) * 0.72;
+        dragging.vy = (latestPoint.y - previousDragPoint.y) * 0.72;
         dragging.x = Math.min(width - 28, Math.max(28, latestPoint.x));
         dragging.y = Math.min(height - 28, Math.max(28, latestPoint.y));
-        dragging.nx = dragging.x / width;
-        dragging.ny = dragging.y / height;
-        dragging.pinned = true;
+        previousDragPoint = latestPoint;
         draw();
         return;
       }
@@ -189,7 +239,6 @@ export default function CreativeUniverseGraph() {
       draw();
     };
     const finishPointer = (event: PointerEvent, cancelled = false) => {
-      clearTimer();
       if (!cancelled && pressed) setSelected({ ...pressed });
       pressed = null;
       dragging = null;
@@ -209,9 +258,10 @@ export default function CreativeUniverseGraph() {
     canvas.addEventListener("pointercancel", onPointerCancel);
     canvas.addEventListener("pointerleave", onPointerLeave);
     layout();
+    animationFrame = requestAnimationFrame(animate);
     return () => {
-      clearTimer();
       observer.disconnect();
+      cancelAnimationFrame(animationFrame);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
@@ -239,8 +289,8 @@ export default function CreativeUniverseGraph() {
 
   return (
     <div className={styles.graphShell}>
-      <canvas ref={canvasRef} className={styles.graphCanvas} aria-label="RING 创作宇宙关系图谱；短按第三级节点查看详情，长按拖动节点" />
-      <div className={styles.graphGestureHint}>短按查看详情 · 长按拖动节点</div>
+      <canvas ref={canvasRef} className={styles.graphCanvas} aria-label="RING 创作宇宙关系图谱；点击第三级节点查看详情，按住即可拖动" />
+      <div className={styles.graphGestureHint}>点击查看详情 · 按住即可拖动</div>
       {detail}
     </div>
   );
