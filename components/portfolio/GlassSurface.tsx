@@ -141,7 +141,7 @@ export default function GlassSurface({
           </filter>
         </defs>
       </svg>
-      <div className={styles.content}>{children}</div>
+      <div className={`${styles.content} ${styles.flush}`}>{children}</div>
     </div>
   );
 }

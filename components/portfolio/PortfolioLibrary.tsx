@@ -50,6 +50,8 @@ export default function PortfolioLibrary() {
         {cards.map((card, index) => (
           <a className={`${styles.link} ${index === 0 ? styles.featured : ""}`} href={`/works.html?category=${card.slug}`} key={card.slug}>
             <SpotlightCard className={styles.card} spotlightColor="rgba(0, 229, 255, 0.2)">
+              <img src={card.cover} alt={`${card.name}分类封面`} loading={index === 0 ? "eager" : "lazy"} />
+              <div className={styles.shade} />
               <GlassSurface
                 width="100%"
                 height="100%"
@@ -64,17 +66,14 @@ export default function PortfolioLibrary() {
                 mixBlendMode="screen"
                 className={styles.glass}
               >
-                <div className={styles.glassScene}>
-                  <img src={card.cover} alt={`${card.name}分类封面`} loading={index === 0 ? "eager" : "lazy"} />
-                  <div className={styles.shade} />
-                  <div className={styles.copy}>
-                    <div><small>{String(index + 1).padStart(2, "0")}</small><i /></div>
-                    <h3>{card.name}</h3>
-                    <b>{card.english}</b>
-                    <p>{card.description}</p>
-                  </div>
-                </div>
+                <span className={styles.glassFill} aria-hidden="true" />
               </GlassSurface>
+              <div className={styles.copy}>
+                <div><small>{String(index + 1).padStart(2, "0")}</small><i /></div>
+                <h3>{card.name}</h3>
+                <b>{card.english}</b>
+                <p>{card.description}</p>
+              </div>
             </SpotlightCard>
           </a>
         ))}
