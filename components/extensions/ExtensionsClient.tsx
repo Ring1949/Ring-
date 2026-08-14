@@ -8,9 +8,9 @@ import { extensionProjects } from "@/lib/extension-projects";
 import styles from "./extensions.module.css";
 
 const sizingFor = (viewport: number) => {
-  if (viewport <= 560) return { width: Math.max(288, Math.min(viewport * 0.84, 370)), height: 272, cardDistance: 15, verticalDistance: 18, skewAmount: 1.6 };
-  if (viewport <= 900) return { width: Math.min(viewport * 0.52, 455), height: 310, cardDistance: 25, verticalDistance: 28, skewAmount: 2.4 };
-  return { width: 560, height: 370, cardDistance: 42, verticalDistance: 40, skewAmount: 3.2 };
+  if (viewport <= 560) { const width = Math.max(288, Math.min(viewport * 0.84, 370)); return { width, height: Math.round(width / 1.78), cardDistance: 15, verticalDistance: 18, skewAmount: 1.6 }; }
+  if (viewport <= 900) { const width = Math.min(viewport * 0.52, 455); return { width, height: Math.round(width / 1.78), cardDistance: 25, verticalDistance: 28, skewAmount: 2.4 }; }
+  return { width: 560, height: 315, cardDistance: 42, verticalDistance: 40, skewAmount: 3.2 };
 };
 
 export default function ExtensionsClient() {
@@ -26,10 +26,6 @@ export default function ExtensionsClient() {
   const navigate = (index: number) => {
     const project = extensionProjects[index];
     if (!project) return;
-    if (project.id === "creative-graph") {
-      window.location.assign(project.href);
-      return;
-    }
     router.push(project.href);
   };
 
@@ -53,13 +49,6 @@ export default function ExtensionsClient() {
             onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigate(index); } }}
           >
             <Image src={project.cover} alt={`${project.title}扩展项目封面`} fill sizes="(max-width: 560px) 84vw, (max-width: 900px) 52vw, 560px" priority={project.index === "01"} />
-            <span className={styles.cardShade} />
-            <span className={styles.cardCopy}>
-              <small>{project.index} / {project.category}</small>
-              <strong>{project.title}</strong>
-              <span>{project.description}</span>
-            </span>
-            <span className={styles.cardArrow} aria-hidden="true">↗</span>
           </Card>)}
         </CardSwap>
       </div>

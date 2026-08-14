@@ -2,3 +2,4 @@
 @media(max-width:920px){.module{grid-template-columns:minmax(250px,35fr) minmax(430px,65fr);gap:30px}.stage{height:510px}.copy>small{margin-top:38px}}
 @media(max-width:720px){.module{width:calc(100% - 40px);min-height:auto;padding:65px 0 85px;grid-template-columns:1fr;gap:28px}.copy{max-width:none}.copy h2{font-size:62px}.copy h3{margin-top:23px}.copy>small{margin-top:30px}.stage{height:380px;margin-top:12px}.card>span{left:22px;right:52px;bottom:21px}.card>span strong{font-size:24px}.card>b{right:21px;bottom:22px}}
 .stage{overscroll-behavior:contain}
+.card[aria-label="进入Skill 库"] img{object-fit:contain;background:#6d5bb1}

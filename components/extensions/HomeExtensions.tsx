@@ -8,9 +8,9 @@ import { extensionProjects } from "@/lib/extension-projects";
 import styles from "./home-extensions.module.css";
 
 const sizingFor = (viewport: number) => {
-  if (viewport <= 560) return { width: Math.max(284, Math.min(viewport * .82, 360)), height: 255, cardDistance: 14, verticalDistance: 17, skewAmount: 1.4 };
-  if (viewport <= 900) return { width: Math.min(viewport * .54, 450), height: 300, cardDistance: 24, verticalDistance: 27, skewAmount: 2.2 };
-  return { width: 540, height: 350, cardDistance: 40, verticalDistance: 38, skewAmount: 3 };
+  if (viewport <= 560) { const width = Math.max(284, Math.min(viewport * .82, 360)); return { width, height: Math.round(width / 1.78), cardDistance: 14, verticalDistance: 17, skewAmount: 1.4 }; }
+  if (viewport <= 900) { const width = Math.min(viewport * .54, 450); return { width, height: Math.round(width / 1.78), cardDistance: 24, verticalDistance: 27, skewAmount: 2.2 }; }
+  return { width: 540, height: 304, cardDistance: 40, verticalDistance: 38, skewAmount: 3 };
 };
 
 export default function HomeExtensions() {
@@ -19,10 +19,6 @@ export default function HomeExtensions() {
   const navigate = (index: number) => {
     const project = extensionProjects[index];
     if (!project) return;
-    if (project.id === "creative-graph") {
-      window.location.assign(project.href);
-      return;
-    }
     router.push(project.href);
   };
   useEffect(() => {
@@ -45,9 +41,6 @@ export default function HomeExtensions() {
           if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigate(index); }
         }}>
           <Image src={project.cover} alt={`${project.title}扩展项目封面`} fill sizes="(max-width:560px) 82vw, (max-width:900px) 54vw, 540px" />
-          <i />
-          <span><small>{project.index} / {project.category}</small><strong>{project.title}</strong><em>{project.description}</em></span>
-          <b aria-hidden="true">↗</b>
         </Card>)}
       </CardSwap>
     </div>
