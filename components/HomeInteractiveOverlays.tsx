@@ -16,6 +16,15 @@ export default function HomeInteractiveOverlays() {
   const [extensionsHost, setExtensionsHost] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
+    const openGraphFromHash = () => {
+      if (window.location.hash === "#contact") setContactReady(true);
+    };
+    openGraphFromHash();
+    window.addEventListener("hashchange", openGraphFromHash);
+    return () => window.removeEventListener("hashchange", openGraphFromHash);
+  }, []);
+
+  useEffect(() => {
     const legacyLibrary = document.querySelector<HTMLElement>("#works-library");
     if (legacyLibrary) {
       const legacyChildren = [...legacyLibrary.children] as HTMLElement[];

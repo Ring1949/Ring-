@@ -16,6 +16,15 @@ const sizingFor = (viewport: number) => {
 export default function HomeExtensions() {
   const router = useRouter();
   const [sizing, setSizing] = useState(() => sizingFor(1280));
+  const navigate = (index: number) => {
+    const project = extensionProjects[index];
+    if (!project) return;
+    if (project.id === "creative-graph") {
+      window.location.assign(project.href);
+      return;
+    }
+    router.push(project.href);
+  };
   useEffect(() => {
     const update = () => setSizing(sizingFor(window.innerWidth));
     update();
@@ -31,9 +40,9 @@ export default function HomeExtensions() {
       <small>CURRENT<br /><strong>{String(extensionProjects.length).padStart(2, "0")} PROJECTS</strong></small>
     </div>
     <div className={styles.stage} aria-label="扩展项目动态封面">
-      <CardSwap {...sizing} delay={5200} pauseOnHover wheelToSwap easing="elastic" onCardClick={(index) => { const project = extensionProjects[index]; if (project) router.push(project.href); }}>
-        {extensionProjects.map((project) => <Card key={project.id} className={styles.card} role="link" tabIndex={0} aria-label={`进入${project.title}`} onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(project.href); }
+      <CardSwap {...sizing} delay={5200} pauseOnHover wheelToSwap easing="elastic" onCardClick={navigate}>
+        {extensionProjects.map((project, index) => <Card key={project.id} className={styles.card} role="link" tabIndex={0} aria-label={`进入${project.title}`} onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigate(index); }
         }}>
           <Image src={project.cover} alt={`${project.title}扩展项目封面`} fill sizes="(max-width:560px) 82vw, (max-width:900px) 54vw, 540px" />
           <i />

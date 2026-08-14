@@ -25,7 +25,12 @@ export default function ExtensionsClient() {
 
   const navigate = (index: number) => {
     const project = extensionProjects[index];
-    if (project) router.push(project.href);
+    if (!project) return;
+    if (project.id === "creative-graph") {
+      window.location.assign(project.href);
+      return;
+    }
+    router.push(project.href);
   };
 
   return <main className={styles.page}>
@@ -39,13 +44,13 @@ export default function ExtensionsClient() {
       </div>
       <div className={styles.swapStage} aria-label="扩展项目动态封面">
         <CardSwap {...sizing} delay={5200} pauseOnHover wheelToSwap easing="elastic" onCardClick={navigate}>
-          {extensionProjects.map((project) => <Card
+          {extensionProjects.map((project, index) => <Card
             key={project.id}
             className={styles.projectCard}
             role="link"
             tabIndex={0}
             aria-label={`进入${project.title}`}
-            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(project.href); } }}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigate(index); } }}
           >
             <Image src={project.cover} alt={`${project.title}扩展项目封面`} fill sizes="(max-width: 560px) 84vw, (max-width: 900px) 52vw, 560px" priority={project.index === "01"} />
             <span className={styles.cardShade} />
