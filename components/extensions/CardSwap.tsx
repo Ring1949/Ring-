@@ -23,7 +23,7 @@ const placeNow = (element: HTMLDivElement | null, slot: Slot, skew: number) => {
   if (!element) return;
   gsap.set(element, {
     x: slot.x, y: slot.y, z: slot.z, xPercent: -50, yPercent: -50,
-    skewY: skew, transformOrigin: "center center", zIndex: slot.zIndex, force3D: true
+    skewY: skew, rotationZ: 0, transformOrigin: "center center", zIndex: slot.zIndex, force3D: true
   });
 };
 
@@ -46,9 +46,6 @@ export default function CardSwap({
   delay = 5000, pauseOnHover = false, wheelToSwap = false, onCardClick, skewAmount = 6,
   easing = "elastic", children
 }: CardSwapProps) {
-  const config = easing === "elastic"
-    ? { ease: "elastic.out(0.6,0.9)", durDrop: 2, durMove: 2, durReturn: 2, promoteOverlap: 0.9, returnDelay: 0.05 }
-    : { ease: "power1.inOut", durDrop: 0.8, durMove: 0.8, durReturn: 0.8, promoteOverlap: 0.45, returnDelay: 0.2 };
   const childArr = useMemo(() => Children.toArray(children), [children]);
   const refs = useMemo(() => childArr.map(() => React.createRef<HTMLDivElement>()), [childArr]);
   const order = useRef(Array.from({ length: childArr.length }, (_, index) => index));
@@ -65,8 +62,11 @@ export default function CardSwap({
     order.current = Array.from({ length: total }, (_, index) => index);
     refs.forEach((ref, index) => placeNow(ref.current, makeSlot(index, cardDistance, verticalDistance, total), skewAmount));
 
-    const duration = wheelToSwap ? 0.68 : config.durMove;
-    const ease = wheelToSwap ? "power3.inOut" : config.ease;
+    const extractDuration = 0.38;
+    const promoteDuration = 0.48;
+    const insertDuration = 0.5;
+    const stagger = 0.06;
+    const insertEase = easing === "smooth" ? "power3.out" : "expo.out";
 
     const normalizeOrder = (nextOrder = order.current) => {
       nextOrder.forEach((index, position) => {
@@ -80,6 +80,9 @@ export default function CardSwap({
       const nextOrder = direction === "prev"
         ? [currentOrder[currentOrder.length - 1], ...currentOrder.slice(0, -1)]
         : [...currentOrder.slice(1), currentOrder[0]];
+      const movingIndex = direction === "next" ? currentOrder[0] : currentOrder[currentOrder.length - 1];
+      const movingElement = refs[movingIndex].current;
+      if (!movingElement) return false;
       isAnimating.current = true;
       const timeline = gsap.timeline({
         onComplete: () => {
@@ -91,21 +94,68 @@ export default function CardSwap({
         }
       });
       timelineRef.current = timeline;
-      nextOrder.forEach((index, slotIndex) => {
-        const element = refs[index].current;
-        if (!element) return;
-        const slot = makeSlot(slotIndex, cardDistance, verticalDistance, total);
-        timeline.to(element, {
-          x: slot.x, y: slot.y, z: slot.z, skewY: skewAmount,
-          duration, ease, force3D: true
+
+      if (direction === "next") {
+        const [, ...rest] = currentOrder;
+        const backSlot = makeSlot(total - 1, cardDistance, verticalDistance, total);
+        timeline.to(movingElement, {
+          x: "-=28", y: "+=400", rotationZ: -3,
+          duration: extractDuration, ease: "power3.in", force3D: true
         }, 0);
-      });
-      timeline.call(() => {
-        nextOrder.forEach((index, slotIndex) => {
+        rest.forEach((index, slotIndex) => {
           const element = refs[index].current;
-          if (element) gsap.set(element, { zIndex: makeSlot(slotIndex, cardDistance, verticalDistance, total).zIndex });
+          if (!element) return;
+          const target = makeSlot(slotIndex, cardDistance, verticalDistance, total);
+          const startAt = 0.12 + slotIndex * stagger;
+          timeline.to(element, {
+            x: target.x, y: target.y, z: target.z,
+            duration: promoteDuration, ease: "power3.inOut", force3D: true
+          }, startAt);
         });
-      }, undefined, duration / 2);
+        timeline.call(() => {
+          gsap.set(movingElement, { zIndex: backSlot.zIndex });
+        }, undefined, 0.39);
+        timeline.call(() => {
+          rest.forEach((index, slotIndex) => {
+            const element = refs[index].current;
+            if (element) gsap.set(element, { zIndex: makeSlot(slotIndex, cardDistance, verticalDistance, total).zIndex });
+          });
+        }, undefined, 0.42);
+        timeline.to(movingElement, {
+          x: backSlot.x, y: backSlot.y, z: backSlot.z, rotationZ: 0,
+          duration: insertDuration, ease: insertEase, force3D: true
+        }, 0.43);
+      } else {
+        const rest = currentOrder.slice(0, -1);
+        const frontSlot = makeSlot(0, cardDistance, verticalDistance, total);
+        timeline.to(movingElement, {
+          x: "+=30", y: "+=360", z: "+=80", rotationZ: 3,
+          duration: extractDuration, ease: "power3.in", force3D: true
+        }, 0);
+        rest.forEach((index, position) => {
+          const element = refs[index].current;
+          if (!element) return;
+          const target = makeSlot(position + 1, cardDistance, verticalDistance, total);
+          const startAt = 0.12 + position * stagger;
+          timeline.to(element, {
+            x: target.x, y: target.y, z: target.z,
+            duration: promoteDuration, ease: "power3.inOut", force3D: true
+          }, startAt);
+        });
+        timeline.call(() => {
+          rest.forEach((index, position) => {
+            const element = refs[index].current;
+            if (element) gsap.set(element, { zIndex: makeSlot(position + 1, cardDistance, verticalDistance, total).zIndex });
+          });
+        }, undefined, 0.39);
+        timeline.call(() => {
+          gsap.set(movingElement, { zIndex: frontSlot.zIndex });
+        }, undefined, 0.41);
+        timeline.to(movingElement, {
+          x: frontSlot.x, y: frontSlot.y, z: frontSlot.z, rotationZ: 0,
+          duration: 0.52, ease: insertEase, force3D: true
+        }, 0.41);
+      }
       return true;
     };
 
@@ -161,7 +211,7 @@ export default function CardSwap({
       wheelGestureTriggered.current = false;
       refs.forEach((ref) => { if (ref.current) gsap.killTweensOf(ref.current); });
     };
-  }, [cardDistance, verticalDistance, delay, pauseOnHover, wheelToSwap, skewAmount, easing, refs, config.durMove, config.ease]);
+  }, [cardDistance, verticalDistance, delay, pauseOnHover, wheelToSwap, skewAmount, easing, refs]);
 
   const rendered = childArr.map((child, index) => isValidElement<CardProps>(child)
     ? cloneElement(child, {
