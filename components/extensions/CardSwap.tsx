@@ -61,34 +61,60 @@ export default function CardSwap({
     order.current = Array.from({ length: total }, (_, index) => index);
     refs.forEach((ref, index) => placeNow(ref.current, makeSlot(index, cardDistance, verticalDistance, total), skewAmount));
 
+    const normalizeOrder = (nextOrder = order.current) => {
+      nextOrder.forEach((index, position) => {
+        placeNow(refs[index].current, makeSlot(position, cardDistance, verticalDistance, total), skewAmount);
+      });
+    };
+
+    const finishActiveTimeline = () => {
+      const activeTimeline = timelineRef.current;
+      if (!activeTimeline) return;
+      if (activeTimeline.progress() < 1) activeTimeline.progress(1);
+      activeTimeline.kill();
+      if (timelineRef.current === activeTimeline) timelineRef.current = null;
+      normalizeOrder();
+    };
+
     const swap = (direction: 1 | -1 = 1) => {
       if (order.current.length < 2) return;
+      finishActiveTimeline();
+      const currentOrder = [...order.current];
+      const nextOrder = direction === -1
+        ? [currentOrder[currentOrder.length - 1], ...currentOrder.slice(0, -1)]
+        : [...currentOrder.slice(1), currentOrder[0]];
+      const commitOrder = () => {
+        order.current = nextOrder;
+        normalizeOrder(nextOrder);
+        timelineRef.current = null;
+      };
+
       if (direction === -1) {
-        const back = order.current[order.current.length - 1];
-        const rest = order.current.slice(0, -1);
+        const back = currentOrder[currentOrder.length - 1];
+        const rest = currentOrder.slice(0, -1);
         const backElement = refs[back].current;
         if (!backElement) return;
-        timelineRef.current?.kill();
-        const timeline = gsap.timeline();
+        const timeline = gsap.timeline({ onComplete: commitOrder });
         timelineRef.current = timeline;
-        timeline.set(backElement, { zIndex: total + 1 });
+        timeline.to(backElement, { y: "+=500", duration: config.durDrop * 0.65, ease: config.ease });
+        timeline.addLabel("reversePromote", `-=${config.durDrop * config.promoteOverlap * 0.65}`);
+        timeline.set(backElement, { zIndex: total + 1 }, "reversePromote");
         rest.forEach((index, position) => {
           const element = refs[index].current;
           if (!element) return;
           const slot = makeSlot(position + 1, cardDistance, verticalDistance, total);
-          timeline.to(element, { x: slot.x, y: slot.y, z: slot.z, duration: config.durMove, ease: config.ease }, position * 0.08);
-          timeline.set(element, { zIndex: slot.zIndex }, position * 0.08);
+          const positionLabel = `reversePromote+=${position * 0.12}`;
+          timeline.set(element, { zIndex: slot.zIndex }, positionLabel);
+          timeline.to(element, { x: slot.x, y: slot.y, z: slot.z, duration: config.durMove, ease: config.ease }, positionLabel);
         });
         const frontSlot = makeSlot(0, cardDistance, verticalDistance, total);
-        timeline.to(backElement, { x: frontSlot.x, y: frontSlot.y, z: frontSlot.z, duration: config.durReturn, ease: config.ease }, 0);
-        timeline.call(() => { order.current = [back, ...rest]; });
+        timeline.to(backElement, { x: frontSlot.x, y: frontSlot.y, z: frontSlot.z, duration: config.durReturn, ease: config.ease }, "reversePromote");
         return;
       }
-      const [front, ...rest] = order.current;
+      const [front, ...rest] = currentOrder;
       const frontElement = refs[front].current;
       if (!frontElement) return;
-      timelineRef.current?.kill();
-      const timeline = gsap.timeline();
+      const timeline = gsap.timeline({ onComplete: commitOrder });
       timelineRef.current = timeline;
       timeline.to(frontElement, { y: "+=500", duration: config.durDrop, ease: config.ease });
       timeline.addLabel("promote", `-=${config.durDrop * config.promoteOverlap}`);
@@ -103,23 +129,23 @@ export default function CardSwap({
       timeline.addLabel("return", `promote+=${config.durMove * config.returnDelay}`);
       timeline.call(() => gsap.set(frontElement, { zIndex: backSlot.zIndex }), undefined, "return");
       timeline.to(frontElement, { x: backSlot.x, y: backSlot.y, z: backSlot.z, duration: config.durReturn, ease: config.ease }, "return");
-      timeline.call(() => { order.current = [...rest, front]; });
     };
 
     const start = () => { intervalRef.current = window.setInterval(() => swap(1), delay); };
     swap(1);
     start();
     const node = container.current;
-    const pause = () => { timelineRef.current?.pause(); window.clearInterval(intervalRef.current); };
-    const resume = () => { timelineRef.current?.play(); window.clearInterval(intervalRef.current); start(); };
-    let lastWheelAt = 0;
+    const pause = () => { window.clearInterval(intervalRef.current); };
+    const resume = () => { window.clearInterval(intervalRef.current); start(); };
+    let wheelGestureActive = false;
+    let wheelReleaseTimer: number | undefined;
     const onWheel = (event: WheelEvent) => {
       if (!wheelToSwap || Math.abs(event.deltaY) < 4) return;
       event.preventDefault();
-      const now = performance.now();
-      if (now - lastWheelAt < 520) return;
-      lastWheelAt = now;
-      timelineRef.current?.play();
+      window.clearTimeout(wheelReleaseTimer);
+      wheelReleaseTimer = window.setTimeout(() => { wheelGestureActive = false; }, 1200);
+      if (wheelGestureActive) return;
+      wheelGestureActive = true;
       swap(event.deltaY < 0 ? -1 : 1);
     };
     if (pauseOnHover && node) {
@@ -138,6 +164,7 @@ export default function CardSwap({
         node.removeEventListener("wheel", onWheel);
       }
       window.clearInterval(intervalRef.current);
+      window.clearTimeout(wheelReleaseTimer);
       timelineRef.current?.kill();
       refs.forEach((ref) => { if (ref.current) gsap.killTweensOf(ref.current); });
     };
