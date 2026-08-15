@@ -1,0 +1,32 @@
+"use client";
+
+import * as React from "react";
+import styles from "./coverflow-carousel.module.css";
+
+export interface CoverflowSlide { src:string; alt:string; title?:string; subtitle?:string; meta?:{label:string;value:string}[] }
+export interface CoverflowCarouselProps { slides:CoverflowSlide[]; rotate?:number; depth?:number; perspective?:number; falloff?:number; fade?:number; cardWidth?:string; gap?:number; loop?:boolean; showCaption?:boolean; showPagination?:boolean; showNavigation?:boolean; label?:string; className?:string; onSelect?:(index:number)=>void }
+const useIsoLayoutEffect=typeof window!=="undefined"?React.useLayoutEffect:React.useEffect;
+
+export function CoverflowCarousel({slides,rotate=44,depth=.6,perspective=3,falloff=.56,fade=.1,cardWidth="clamp(190px, 26vw, 340px)",gap=.05,loop=true,showCaption=true,showPagination=true,showNavigation=true,label="诗词封面轮播",className="",onSelect}:CoverflowCarouselProps){
+  const count=slides.length,frameRef=React.useRef<HTMLDivElement>(null),cardRefs=React.useRef<(HTMLButtonElement|null)[]>([]),posRef=React.useRef(0),targetRef=React.useRef(0),widthRef=React.useRef(0),rafRef=React.useRef<number|null>(null),dragRef=React.useRef<{id:number;x:number;pos:number;v:number;t:number;moved:boolean}|null>(null),movedRef=React.useRef(false);
+  const [selected,setSelected]=React.useState(0);
+  const indexAt=React.useCallback((pos:number)=>count?((Math.round(pos)%count)+count)%count:0,[count]);
+  const paint=React.useCallback(()=>{const width=widthRef.current;if(!width||!count)return;const pitch=width*(1+gap),pos=posRef.current;cardRefs.current.forEach((card,index)=>{if(!card)return;let offset=index-pos;if(loop){offset=((offset%count)+count)%count;if(offset>count/2)offset-=count}const distance=Math.abs(offset),ramp=Math.pow(distance,falloff),tilt=Math.min(rotate*ramp,82)*Math.sign(offset),edge=loop?Math.min(1,Math.max(0,count/2-distance)):1;card.style.transform=`translateX(calc(-50% + ${offset*pitch}px)) translateZ(${-depth*width*ramp}px) rotateY(${-tilt}deg)`;card.style.opacity=String(Math.max(0,1-fade*distance)*edge);card.style.zIndex=String(100-Math.round(distance));card.dataset.active=distance<.5?"true":"false"})},[count,depth,fade,falloff,gap,loop,rotate]);
+  const settle=React.useCallback((target:number)=>{if(rafRef.current!==null)cancelAnimationFrame(rafRef.current);targetRef.current=target;setSelected(indexAt(target));const step=()=>{const remaining=target-posRef.current;if(Math.abs(remaining)<.0004){posRef.current=target;paint();rafRef.current=null;return}posRef.current+=remaining*.16;paint();rafRef.current=requestAnimationFrame(step)};rafRef.current=requestAnimationFrame(step)},[indexAt,paint]);
+  const clamp=React.useCallback((pos:number)=>loop?pos:Math.max(0,Math.min(count-1,pos)),[count,loop]);
+  const goTo=React.useCallback((index:number)=>{const target=loop?index+Math.round((targetRef.current-index)/count)*count:index;settle(clamp(target))},[clamp,count,loop,settle]);
+  const nudge=React.useCallback((by:number)=>settle(clamp(Math.round(targetRef.current)+by)),[clamp,settle]);
+  const pointerDown=(event:React.PointerEvent<HTMLDivElement>)=>{if(rafRef.current!==null)cancelAnimationFrame(rafRef.current);event.currentTarget.setPointerCapture(event.pointerId);targetRef.current=posRef.current;movedRef.current=false;dragRef.current={id:event.pointerId,x:event.clientX,pos:posRef.current,v:0,t:performance.now(),moved:false}};
+  const pointerMove=(event:React.PointerEvent<HTMLDivElement>)=>{const drag=dragRef.current;if(!drag||drag.id!==event.pointerId)return;const pitch=widthRef.current*(1+gap);if(!pitch)return;const delta=event.clientX-drag.x;if(Math.abs(delta)>5){drag.moved=true;movedRef.current=true}const now=performance.now(),previous=posRef.current;posRef.current=clamp(drag.pos-delta/pitch);drag.v=((posRef.current-previous)/Math.max(now-drag.t,1))*1000;drag.t=now;const index=indexAt(posRef.current);if(index!==selected)setSelected(index);paint()};
+  const pointerEnd=(event:React.PointerEvent<HTMLDivElement>)=>{const drag=dragRef.current;if(!drag||drag.id!==event.pointerId)return;dragRef.current=null;settle(clamp(Math.round(posRef.current+Math.max(-2,Math.min(2,drag.v*.18)))))};
+  useIsoLayoutEffect(()=>{const frame=frameRef.current;if(!frame)return;const measure=()=>{const card=cardRefs.current[0];if(!card)return;widthRef.current=card.offsetWidth;paint()};measure();const observer=new ResizeObserver(measure);observer.observe(frame);return()=>observer.disconnect()},[paint]);
+  React.useEffect(()=>()=>{if(rafRef.current!==null)cancelAnimationFrame(rafRef.current)},[]);
+  if(!count)return null;const active=slides[selected];
+  return <div className={`${styles.root} ${className}`} style={{["--cf-card" as string]:cardWidth}} role="region" aria-roledescription="carousel" aria-label={label}>
+    <div className={styles.stage}><div ref={frameRef} tabIndex={0} className={styles.frame} style={{perspective:`calc(var(--cf-card) * ${perspective})`}} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onKeyDown={(event)=>{if(event.key==="ArrowLeft"){event.preventDefault();nudge(-1)}else if(event.key==="ArrowRight"){event.preventDefault();nudge(1)}}}><div className={styles.track}>
+      {slides.map((slide,index)=><button key={`${slide.src}-${index}`} ref={(node)=>{cardRefs.current[index]=node}} type="button" role="group" aria-roledescription="slide" aria-label={`${index+1} / ${count}：${slide.title||slide.alt}`} className={styles.card} onClick={()=>{if(movedRef.current)return;if(index===selected)onSelect?.(index);else goTo(index)}}><img src={slide.src} alt={slide.alt} draggable={false}/><span className={styles.glass}><b>{slide.title}</b><small>{slide.subtitle}</small></span></button>)}
+    </div></div>{showNavigation?<><button className={`${styles.nav} ${styles.prev}`} aria-label="上一张" onClick={()=>nudge(-1)}>←</button><button className={`${styles.nav} ${styles.next}`} aria-label="下一张" onClick={()=>nudge(1)}>→</button></>:null}</div>
+    {showCaption&&active?.title?<div className={styles.caption} key={selected}><p>{active.title}</p>{active.subtitle?<span>{active.subtitle}</span>:null}{active.meta?.length?<dl>{active.meta.map((row)=><div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>:null}</div>:null}
+    {showPagination?<div className={styles.pagination}>{slides.map((_,index)=><button key={index} aria-label={`切换到第 ${index+1} 张`} aria-current={index===selected} onClick={()=>goTo(index)}/>)}</div>:null}
+  </div>
+}
