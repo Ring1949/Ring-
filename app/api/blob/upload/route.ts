@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
         if (!isAdmin(request)) throw new Error("请先登录后台再上传文件。");
         let payload: { kind?: string } = {};
         try { payload = JSON.parse(clientPayload || "{}"); } catch { /* use validation below */ }
-        const kind = payload.kind === "skill" ? "skill" : payload.kind === "media" ? "media" : null;
+        const kind = payload.kind === "skill" ? "skill" : payload.kind === "media" ? "media" : payload.kind === "prompt" ? "prompt" : null;
         if (!kind) throw new Error("无法识别上传目标。");
-        const prefix = kind === "skill" ? SKILL_FILE_PREFIX : MEDIA_FILE_PREFIX;
+        const prefix = kind === "skill" ? SKILL_FILE_PREFIX : kind === "prompt" ? "prompt-library/images/" : MEDIA_FILE_PREFIX;
         if (!pathname.startsWith(prefix)) throw new Error("上传路径不合法。");
         return {
-          maximumSizeInBytes: maximumBytes(kind),
+          maximumSizeInBytes: kind === "prompt" ? 20 * 1024 * 1024 : maximumBytes(kind),
           addRandomSuffix: true,
           allowOverwrite: false,
           cacheControlMaxAge: 31_536_000
