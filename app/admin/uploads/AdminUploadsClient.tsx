@@ -1,19 +1,15 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { uploadFile } from "@/lib/storage-client";
 import styles from "../library-admin.module.css";
 
-type UploadedBlob = { url: string; downloadUrl: string; pathname: string; contentType: string };
+type UploadedBlob = Awaited<ReturnType<typeof uploadFile>>;
 type PendingFile = { blob: UploadedBlob; file: File };
 type Option = { id: string | number; name?: string; title?: string; slug?: string };
 type Media = { id: string; title: string; original_name: string; size: number; category_name: string; file_path: string };
 type CoverTarget = { kind: "category" | "project"; id: string; label: string };
-
-function safeName(name: string) {
-  return name.normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, "-").slice(0, 120) || "media-file";
-}
 
 function fileSize(bytes: number) {
   return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -93,10 +89,9 @@ export function AdminUploadsClient() {
       for (let index = 0; index < selected.length; index += 1) {
         const file = selected[index];
         setStatus(`正在直传 ${index + 1}/${selected.length}：${file.name}`);
-        const blob = await upload(`portfolio/admin/${safeName(file.name)}`, file, {
-          access: "public", handleUploadUrl: "/api/blob/upload", clientPayload: JSON.stringify({ kind: "media" }),
-          multipart: file.size > 100 * 1024 * 1024,
-          onUploadProgress: ({ percentage }) => setProgress(Math.round(((index + percentage / 100) / selected.length) * 100))
+        const blob = await uploadFile(file, {
+          kind: "media",
+          onProgress: (percentage) => setProgress(Math.round(((index + percentage / 100) / selected.length) * 100))
         });
         uploaded.push({ blob, file }); setPending([...uploaded]);
       }
@@ -118,15 +113,14 @@ export function AdminUploadsClient() {
       if (!coverTarget) throw new Error("请选择这张封面属于哪个作品或分类。");
       const [kind, targetId] = coverTarget.split(":", 2) as ["category" | "project", string];
       setCoverStatus(`正在上传封面：${coverFile.name}`);
-      const blob = await upload(`portfolio/admin/covers/${safeName(coverFile.name)}`, coverFile, {
-        access: "public", handleUploadUrl: "/api/blob/upload", clientPayload: JSON.stringify({ kind: "media" }),
-        multipart: coverFile.size > 100 * 1024 * 1024,
-        onUploadProgress: ({ percentage }) => setCoverProgress(Math.max(1, Math.round(percentage * 0.85)))
+      const blob = await uploadFile(coverFile, {
+        kind: "cover",
+        onProgress: (percentage) => setCoverProgress(Math.max(1, Math.round(percentage * 0.85)))
       });
       setCoverStatus("图片上传完成，正在保存封面关系…"); setCoverProgress(90);
       const response = await fetch("/api/portfolio-covers", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, target_id: targetId, url: blob.url, pathname: blob.pathname, size: coverFile.size, content_type: coverFile.type || blob.contentType })
+        body: JSON.stringify({ kind, target_id: targetId, url: blob.url, pathname: blob.pathname, size: coverFile.size, content_type: coverFile.type || blob.contentType, storage_provider: blob.storageProvider, width: blob.width, height: blob.height })
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "封面关系保存失败。");

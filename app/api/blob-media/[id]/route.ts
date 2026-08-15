@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getBlobMediaRecords, removeBlobFile, saveBlobMediaRecords } from "@/lib/blob-library";
+import { getBlobMediaRecords, removeStoredFile, saveBlobMediaRecords } from "@/lib/blob-library";
 import { requireAdmin } from "@/lib/utils";
 
 type Context = { params: Promise<{ id: string }> };
@@ -15,7 +15,7 @@ export async function DELETE(request: NextRequest, context: Context) {
     const records = await getBlobMediaRecords();
     const record = records.find((item) => item.id === id);
     if (!record) return NextResponse.json({ error: "作品文件不存在或已经被删除。" }, { status: 404 });
-    await removeBlobFile(record.file_path);
+    await removeStoredFile({ url: record.file_path, pathname: record.storage_path, storageProvider: record.storage_provider });
     await saveBlobMediaRecords(records.filter((item) => item.id !== id));
     return NextResponse.json({ deleted: true });
   } catch (error) {

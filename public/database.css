@@ -24,3 +24,4 @@
 @media(max-width:700px){.database-hero{padding-top:145px}.database-hero span{margin-left:0}.database-content{padding-left:14px;padding-right:14px}.masonry-grid{column-count:2;column-gap:12px}.masonry-card{margin-bottom:12px;border-radius:13px}.masonry-copy{padding:14px}.database-lightbox{padding:10px}.database-lightbox-panel{max-height:96vh}}
 @media(max-width:480px){.masonry-grid{column-count:1}.database-filters{top:72px}.database-hero h1{font-size:17vw}}
 .masonry-media{aspect-ratio:auto!important}.masonry-media img{height:auto;min-height:0;object-fit:contain}.masonry-media video{height:auto;aspect-ratio:16/9;object-fit:cover}
+.database-load-more{display:block;margin:32px auto 0;padding:12px 24px;border:1px solid currentColor;border-radius:999px;background:transparent;color:inherit;cursor:pointer}.database-load-more[hidden]{display:none}.database-load-more:disabled{opacity:.55;cursor:wait}

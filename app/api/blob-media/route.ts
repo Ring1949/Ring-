@@ -8,7 +8,7 @@ import {
   MEDIA_FILE_PREFIX,
   saveBlobMediaRecords,
   storageErrorMessage,
-  verifyUploadedBlob,
+  verifyUploadedObject,
   type BlobMediaRecord
 } from "@/lib/blob-library";
 import { basePortfolioCategories, basePortfolioProjects } from "@/lib/portfolio-state";
@@ -43,12 +43,13 @@ export async function POST(request: NextRequest) {
     const requestedCategory = categories.find((item: any) => String(item.id) === String(body.category_id));
     const category = requestedCategory || categories.find((item: any) => item.slug === "photo") || null;
     const project = basePortfolioProjects().find((item: any) => String(item.id) === String(body.project_id)) || null;
-    const verified = await Promise.all(files.map((file: any) => verifyUploadedBlob({
+    const verified = await Promise.all(files.map((file: any) => verifyUploadedObject({
       url: String(file.url || ""),
       pathname: String(file.pathname || ""),
       expectedSize: Number(file.size) || 0,
       prefix: MEDIA_FILE_PREFIX,
-      maximumSize
+      maximumSize,
+      storageProvider: String(file.storageProvider || file.storage_provider || file.provider || "")
     })));
     const timestamp = new Date().toISOString();
     const existing = await getBlobMediaRecords();
@@ -63,6 +64,11 @@ export async function POST(request: NextRequest) {
         file_path: metadata.url,
         download_url: metadata.downloadUrl,
         storage_path: metadata.pathname,
+        object_key: metadata.pathname,
+        storage_provider: metadata.provider,
+        thumbnail_url: String(source.thumbnailUrl || source.thumbnail_url || ""),
+        width: Number(source.width) || 0,
+        height: Number(source.height) || 0,
         original_name: originalName,
         file_type: fileType(originalName),
         mime_type: metadata.contentType || String(source.content_type || "application/octet-stream"),

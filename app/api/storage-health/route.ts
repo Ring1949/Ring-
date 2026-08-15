@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { checkBlobWritable, getBlobMediaRecords, getBlobStorageSnapshot, getSkillManifest, storageErrorMessage } from "@/lib/blob-library";
+import { checkR2Writable, r2Configured } from "@/lib/r2";
 import { isAdmin } from "@/lib/utils";
 
 function isCron(request: NextRequest) {
@@ -14,33 +14,30 @@ export async function GET(request: NextRequest) {
   if (!isAdmin(request) && !isCron(request)) {
     return NextResponse.json({ error: "请先登录后台。" }, { status: 401 });
   }
+  if (!r2Configured()) {
+    return NextResponse.json({
+      ok: false,
+      configured: false,
+      primary_provider: "cloudflare-r2",
+      error: "Cloudflare R2 新上传配置不完整。",
+      checked_at: new Date().toISOString()
+    }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+  }
   try {
-    const [storage, skills, media] = await Promise.all([
-      getBlobStorageSnapshot(),
-      getSkillManifest(),
-      getBlobMediaRecords()
-    ]);
-    let writeCheck: { writable: boolean; checked_at: string; error?: string };
-    try {
-      writeCheck = await checkBlobWritable();
-    } catch (error) {
-      writeCheck = { writable: false, checked_at: new Date().toISOString(), error: storageErrorMessage(error) };
-    }
+    const writeCheck = await checkR2Writable();
     return NextResponse.json({
       ok: writeCheck.writable,
-      storage,
+      configured: true,
+      primary_provider: "cloudflare-r2",
       write_check: writeCheck,
-      error: writeCheck.error,
-      skill_count: skills.skills.length,
-      skill_manifest_version: skills.version,
-      admin_media_count: media.length,
       checked_at: new Date().toISOString()
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    console.error("[storage-health] persistent storage check failed", error);
     return NextResponse.json({
       ok: false,
-      error: storageErrorMessage(error, "持久存储检查失败"),
+      configured: true,
+      primary_provider: "cloudflare-r2",
+      error: error instanceof Error ? error.message : "Cloudflare R2 写入检查失败。",
       checked_at: new Date().toISOString()
     }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
   }

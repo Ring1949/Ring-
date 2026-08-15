@@ -5,6 +5,7 @@ import {
   list as listVercelBlobs,
   put as putVercelBlob
 } from "@vercel/blob";
+import { deleteR2Object, r2Configured, readLatestR2Json, verifyR2Object, writeR2Json } from "@/lib/r2";
 
 export const SKILL_FILE_PREFIX = "skill-library/files/";
 export const MEDIA_FILE_PREFIX = "portfolio/admin/";
@@ -42,6 +43,8 @@ export type SkillRecord = {
   created_at: string;
   updated_at: string;
   last_verified_at: string;
+  storage_provider?: "vercel-blob" | "r2";
+  object_key?: string;
 };
 
 export type SkillManifest = {
@@ -70,6 +73,11 @@ export type BlobMediaRecord = Record<string, unknown> & {
   show_in_database: number;
   created_at: string;
   updated_at: string;
+  storage_provider?: "vercel-blob" | "r2";
+  object_key?: string;
+  thumbnail_url?: string;
+  width?: number;
+  height?: number;
 };
 
 type MediaManifest = { version: number; updated_at: string; media: BlobMediaRecord[] };
@@ -135,6 +143,10 @@ async function listManifestObjects(prefix: string) {
 }
 
 async function readLatestManifest<T>(prefix: string, fallback: () => T): Promise<T> {
+  if (r2Configured()) {
+    const r2Manifest = await readLatestR2Json<T>(prefix).catch(() => null);
+    if (r2Manifest) return r2Manifest;
+  }
   if (!blobStorageConfigured()) return fallback();
   const objects = (await listManifestObjects(prefix)).filter((item) => item.pathname.endsWith(".json"));
   objects.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
@@ -146,6 +158,10 @@ async function readLatestManifest<T>(prefix: string, fallback: () => T): Promise
 }
 
 async function appendManifest(prefix: string, payload: unknown) {
+  if (r2Configured()) {
+    await writeR2Json(prefix, payload);
+    return;
+  }
   const pathname = `${prefix}${Date.now()}-${crypto.randomUUID()}.json`;
   await putVercelBlob(pathname, JSON.stringify(payload, null, 2), {
     access: "public",
@@ -234,8 +250,33 @@ export async function verifyUploadedBlob(input: {
   return metadata;
 }
 
+export async function verifyUploadedObject(input: {
+  url: string;
+  pathname: string;
+  expectedSize: number;
+  prefix: string;
+  maximumSize: number;
+  storageProvider?: string;
+}) {
+  if (input.storageProvider === "r2") {
+    if (input.expectedSize <= 0 || input.expectedSize > input.maximumSize) throw new Error("文件大小无效或超过限制。");
+    const metadata = await verifyR2Object(input.pathname, input.expectedSize);
+    if (!metadata.pathname.startsWith(input.prefix)) throw new Error("R2 文件路径不属于当前文件库。");
+    return metadata;
+  }
+  return { ...(await verifyUploadedBlob(input)), provider: "vercel-blob" as const };
+}
+
 export async function removeBlobFile(url: string) {
   if (url) await deleteVercelBlob(url, { token: vercelToken() });
+}
+
+export async function removeStoredFile(input: { url: string; pathname?: string; storageProvider?: string }) {
+  if (input.storageProvider === "r2") {
+    if (input.pathname) await deleteR2Object(input.pathname);
+    return;
+  }
+  await removeBlobFile(input.url);
 }
 
 export async function getBlobStorageSnapshot() {

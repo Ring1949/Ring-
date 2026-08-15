@@ -1,10 +1,5 @@
-import {
-  del,
-  get,
-  head,
-  list,
-  put
-} from "@vercel/blob";
+import { get, list } from "@vercel/blob";
+import { deleteR2Object, r2Configured, readLatestR2Json, verifyR2Object, writeR2Json } from "@/lib/r2";
 
 export const PROMPT_IMAGE_PREFIX = "prompt-library/images/";
 const PROMPT_MANIFEST_PREFIX = "site-state/v1/prompt-library/";
@@ -20,6 +15,8 @@ export type PromptRecord = {
   image_url: string;
   image_pathname: string;
   image_name: string;
+  storage_provider?: "r2" | "vercel-blob";
+  object_key?: string;
   usage_count: number;
   created_at: string;
   updated_at: string;
@@ -52,40 +49,39 @@ function fallbackManifest(): PromptManifest {
 }
 
 export async function getPromptManifest(): Promise<PromptManifest> {
+  if (r2Configured()) {
+    const current = await readLatestR2Json<PromptManifest>(PROMPT_MANIFEST_PREFIX).catch(() => null);
+    if (current) return current;
+  }
   if (!process.env.BLOB_READ_WRITE_TOKEN) return fallbackManifest();
-  const result = await list({ prefix: PROMPT_MANIFEST_PREFIX, limit: 1000, token: token() });
-  const latest = result.blobs.filter((item) => item.pathname.endsWith(".json")).sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))[0];
-  if (!latest) return fallbackManifest();
-  const response = await get(latest.url, { access: "public", token: token() });
-  if (!response || response.statusCode !== 200 || !response.stream) return fallbackManifest();
-  const payload = JSON.parse(await new Response(response.stream).text()) as Partial<PromptManifest>;
-  return {
-    version: Number(payload.version) || 1,
-    updated_at: String(payload.updated_at || initialDate),
-    prompts: Array.isArray(payload.prompts) ? payload.prompts : defaultPrompts
-  };
+  try {
+    const result = await list({ prefix: PROMPT_MANIFEST_PREFIX, limit: 1000, token: token() });
+    const latest = result.blobs.filter((item) => item.pathname.endsWith(".json")).sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))[0];
+    if (!latest) return fallbackManifest();
+    const response = await get(latest.url, { access: "public", token: token() });
+    if (!response || response.statusCode !== 200 || !response.stream) return fallbackManifest();
+    const payload = JSON.parse(await new Response(response.stream).text()) as Partial<PromptManifest>;
+    return { version: Number(payload.version) || 1, updated_at: String(payload.updated_at || initialDate), prompts: Array.isArray(payload.prompts) ? payload.prompts : defaultPrompts };
+  } catch {
+    return fallbackManifest();
+  }
 }
 
 export async function savePromptManifest(manifest: PromptManifest) {
   const next = { ...manifest, version: manifest.version + 1, updated_at: new Date().toISOString() };
-  await put(`${PROMPT_MANIFEST_PREFIX}${Date.now()}-${crypto.randomUUID()}.json`, JSON.stringify(next, null, 2), {
-    access: "public",
-    addRandomSuffix: false,
-    contentType: "application/json; charset=utf-8",
-    cacheControlMaxAge: 60,
-    token: token()
-  });
+  if (!r2Configured()) throw new Error("Cloudflare R2 未配置，新内容无法保存。");
+  await writeR2Json(PROMPT_MANIFEST_PREFIX, next);
   return next;
 }
 
-export async function verifyPromptImage(image: { url: string; pathname: string; size: number }) {
-  if (!image.pathname.startsWith(PROMPT_IMAGE_PREFIX)) throw new Error("图片路径不属于 Prompt 库。");
+export async function verifyPromptImage(image: { url: string; pathname: string; object_key?: string; storage_provider?: string; size: number }) {
+  const objectKey = image.object_key || image.pathname;
+  if (image.storage_provider !== "r2" || !objectKey.startsWith(PROMPT_IMAGE_PREFIX)) throw new Error("新图片必须上传到 Cloudflare R2。");
   if (image.size <= 0 || image.size > PROMPT_IMAGE_MAX_BYTES) throw new Error("预览图最大为 20 MB。");
-  const metadata = await head(image.url, { token: token() });
-  if (metadata.pathname !== image.pathname || Number(metadata.size) !== Number(image.size)) throw new Error("图片上传校验失败，请重新选择图片。");
+  const metadata = await verifyR2Object(objectKey, image.size);
   if (!String(metadata.contentType || "").startsWith("image/")) throw new Error("只能上传图片文件。");
 }
 
-export async function removePromptImage(url: string) {
-  if (url) await del(url, { token: token() });
+export async function removePromptImage(record: Pick<PromptRecord, "storage_provider" | "object_key">) {
+  if (record.storage_provider === "r2" && record.object_key) await deleteR2Object(record.object_key);
 }

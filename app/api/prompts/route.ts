@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       category: text(body.category, 30) || "未分类",
       description: text(body.description, 240), tags: tags(body.tags),
       image_url: text(body.image?.url, 2000), image_pathname: text(body.image?.pathname, 1000), image_name: text(body.image?.name, 240),
+      storage_provider: body.image ? "r2" : undefined, object_key: text(body.image?.object_key, 1000) || undefined,
       usage_count: 0, created_at: now, updated_at: now
     };
     const manifest = await getPromptManifest();

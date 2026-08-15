@@ -1,6 +1,7 @@
 ﻿import { NextRequest } from "next/server";
 import { getSettings, now, replaceTagLinks, setSettings, slugify } from "@/lib/db";
 import { getSupabaseServer, SUPABASE_MEDIA_BUCKET } from "@/lib/supabase";
+import { createR2PresignedUpload, deleteR2Object, r2Configured, verifyR2Object } from "@/lib/r2";
 import { bool, formValue, isAdmin, json, parseTagIds, requireAdmin } from "@/lib/utils";
 import { defaultCategories, isSupabaseConfigError } from "@/lib/fallback-data";
 
@@ -97,8 +98,12 @@ function inferMediaTypeFromMime(mimeType = "", filename = "") {
   return "file";
 }
 
-async function verifyStorageObject(storagePath: string, expectedSize = 0) {
+async function verifyStorageObject(storagePath: string, expectedSize = 0, storageProvider = "supabase") {
   if (!storagePath) throw new Error("Upload verification failed: empty storage path.");
+  if (storageProvider === "r2") {
+    await verifyR2Object(storagePath, expectedSize);
+    return;
+  }
   const slash = storagePath.lastIndexOf("/");
   const folder = slash >= 0 ? storagePath.slice(0, slash) : "";
   const name = slash >= 0 ? storagePath.slice(slash + 1) : storagePath;
@@ -112,51 +117,19 @@ async function verifyStorageObject(storagePath: string, expectedSize = 0) {
 
 async function uploadToStorage(file: File | null) {
   if (!file || !file.size) return null;
-  const supabase = getSupabaseServer();
-  const extension = extensionFor(file.name);
-  const storagePath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
-  const { error } = await supabase.storage
-    .from(SUPABASE_MEDIA_BUCKET)
-    .upload(storagePath, file, {
-      contentType: file.type || mimeTypeForExtension(extension),
-      upsert: false
-    });
-  if (error) throw new Error(`Upload failed: ${error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists and check the file size and format.`);
-  await verifyStorageObject(storagePath, file.size);
-  const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
-  return {
-    filename: storagePath.split("/").pop() || storagePath,
-    storage_path: storagePath,
-    public_url: data.publicUrl,
-    originalname: file.name,
-    mimetype: file.type || mimeTypeForExtension(extension),
-    size: file.size,
-    metadata: {}
-  };
+  throw new Error("服务端文件上传已停用，请使用浏览器直传 Cloudflare R2。");
 }
-async function createSignedStorageUpload(filename: string, contentType = "", size = 0) {
-  const supabase = getSupabaseServer();
-  const extension = extensionFor(filename);
-  const storagePath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
-  const signed = await supabase.storage
-    .from(SUPABASE_MEDIA_BUCKET)
-    .createSignedUploadUrl(storagePath);
-  if (signed.error) throw new Error(`Upload preparation failed: ${signed.error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists.`);
-  const { data } = supabase.storage.from(SUPABASE_MEDIA_BUCKET).getPublicUrl(storagePath);
+async function createSignedStorageUpload(filename: string, contentType = "", size = 0, origin = "") {
+  if (!r2Configured()) throw new Error("Cloudflare R2 未配置，新文件无法上传。");
+  const signed = await createR2PresignedUpload({ kind: "legacy-media", filename, contentType, size, origin });
   return {
-    filename: storagePath.split("/").pop() || storagePath,
-    storage_path: storagePath,
-    public_url: data.publicUrl,
+    ...signed,
+    filename: signed.object_key.split("/").pop() || signed.object_key,
     originalname: filename,
-    mimetype: contentType || mimeTypeForExtension(extension),
+    mimetype: signed.content_type,
     size,
-    signed_url: signed.data.signedUrl,
-    token: signed.data.token,
-    upload_headers: {
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""}`,
-      "x-upsert": "false"
-    }
+    storage_provider: "r2",
+    object_key: signed.object_key
   };
 }
 
@@ -169,10 +142,14 @@ function mediaPayloadFromSaved(saved: any, values: any, index = 0) {
     description: values.description || "",
     file_path: saved.public_url,
     storage_path: saved.storage_path || "",
+    object_key: saved.object_key || saved.storage_path || "",
+    storage_provider: saved.storage_provider || "supabase",
     original_name: saved.originalname,
     file_type: extensionFor(saved.originalname),
     mime_type: saved.mimetype,
     size: Number(saved.size) || 0,
+    width: Number(saved.width) || 0,
+    height: Number(saved.height) || 0,
     media_type: mediaType,
     tags: values.tags || "",
     camera: values.camera || "",
@@ -203,6 +180,16 @@ async function removeStorageUrl(url: string) {
   const storagePath = storagePathFromPublicUrl(url);
   if (!storagePath) return;
   await getSupabaseServer().storage.from(SUPABASE_MEDIA_BUCKET).remove([storagePath]);
+}
+
+async function removeMediaObject(item: any) {
+  const storagePath = String(item?.object_key || item?.storage_path || "");
+  const r2 = item?.storage_provider === "r2" || String(item?.file_path || "").includes("/api/r2/object/");
+  if (r2 && storagePath) {
+    await deleteR2Object(storagePath);
+    return;
+  }
+  await removeStorageUrl(String(item?.file_path || ""));
 }
 
 async function addMediaTagIds(mediaRows: any[]) {
@@ -248,10 +235,16 @@ async function projectWithRelations(project: any) {
 async function createMediaBatch(payloads: Record<string, unknown>[], tagIds: unknown[] = []) {
   if (!payloads.length) return [];
   const supabase = getSupabaseServer();
-  const storagePaths = payloads.map((payload: any) => String(payload.storage_path || "")).filter(Boolean);
-  const { data, error } = await supabase.from("media").insert(payloads).select("*");
+  let { data, error } = await supabase.from("media").insert(payloads).select("*");
+  if (error && /column .* (object_key|storage_provider|width|height).* does not exist|schema cache/i.test(error.message || "")) {
+    const legacyPayloads = payloads.map(({ object_key: _objectKey, storage_provider: _storageProvider, width: _width, height: _height, ...payload }) => payload);
+    ({ data, error } = await supabase.from("media").insert(legacyPayloads).select("*"));
+  }
   if (error) {
-    if (storagePaths.length) await supabase.storage.from(SUPABASE_MEDIA_BUCKET).remove(storagePaths).catch(() => undefined as any);
+    const r2Paths = payloads.filter((payload: any) => payload.storage_provider === "r2").map((payload: any) => String(payload.storage_path || "")).filter(Boolean);
+    const supabasePaths = payloads.filter((payload: any) => payload.storage_provider !== "r2").map((payload: any) => String(payload.storage_path || "")).filter(Boolean);
+    await Promise.all(r2Paths.map((key) => deleteR2Object(key).catch(() => undefined)));
+    if (supabasePaths.length) await supabase.storage.from(SUPABASE_MEDIA_BUCKET).remove(supabasePaths).catch(() => undefined as any);
     throw new Error(`Upload failed: ${error.message}. Confirm the public Storage bucket "${SUPABASE_MEDIA_BUCKET}" exists and check the file size and format.`);
   }
 
@@ -526,14 +519,14 @@ export async function handleArchivePost(request: NextRequest, context: { params:
     const body: any = await request.json().catch(() => ({}));
     const filename = String(body.filename || "").trim();
     if (!filename) return json({ error: "Missing filename" }, 400);
-    return json(await createSignedStorageUpload(filename, String(body.contentType || ""), Number(body.size) || 0));
+    return json(await createSignedStorageUpload(filename, String(body.contentType || ""), Number(body.size) || 0, request.nextUrl.origin));
   }
 
   if (route === "media/direct-record") {
     const body: any = await request.json().catch(() => ({}));
     const files = Array.isArray(body.files) ? body.files : [];
     if (!files.length) return json({ error: "No uploaded files" }, 400);
-    await Promise.all(files.map((file: any) => verifyStorageObject(String(file.storage_path || ""), Number(file.size) || 0)));
+    await Promise.all(files.map((file: any) => verifyStorageObject(String(file.storage_path || ""), Number(file.size) || 0, String(file.storage_provider || "supabase"))));
     const values = { ...body, category_id: await canonicalCategoryId(body.category_id) };
     const payloads = files.map((file: any, index: number) => mediaPayloadFromSaved(file, values, index));
     const created = await createMediaBatch(payloads, parseTagIds(body.tag_ids));
@@ -677,9 +670,9 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
     if (existing.error) throw existing.error;
     if (!existing.data) return json({ error: "Resource not found" }, 404);
     await removeStorageUrl(existing.data.cover_image);
-    const media = await supabase.from("media").select("file_path").eq("project_id", Number(path[1]));
+    const media = await supabase.from("media").select("*").eq("project_id", Number(path[1]));
     if (media.error) throw media.error;
-    await Promise.all((media.data || []).map((item: any) => removeStorageUrl(item.file_path)));
+    await Promise.all((media.data || []).map((item: any) => removeMediaObject(item)));
     const { error } = await supabase.from("projects").delete().eq("id", Number(path[1]));
     if (error) throw error;
     return json({ deleted: true });
@@ -688,7 +681,7 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
     const existing = await supabase.from("media").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
     if (!existing.data) return json({ error: "Resource not found" }, 404);
-    await removeStorageUrl(existing.data.file_path);
+    await removeMediaObject(existing.data);
     const { error } = await supabase.from("media").delete().eq("id", Number(path[1]));
     if (error) throw error;
     return json({ deleted: true });

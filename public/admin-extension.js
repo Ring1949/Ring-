@@ -42,8 +42,7 @@ mediaInput.addEventListener("change",(event)=>renderSelectedFiles(event.target.f
   event.preventDefault();mediaDropZone.classList.remove("dragging");
 }));
 
-const DIRECT_UPLOAD_THRESHOLD = 3.5 * 1024 * 1024;
-function shouldUseDirectUpload(files){return [...files].some((file)=>file.size>DIRECT_UPLOAD_THRESHOLD||file.type.startsWith("video/"));}
+function shouldUseDirectUpload(files){return files.length>0;}
 function mediaFormPayload(form, tagIds){
   const data=new FormData(form);
   data.delete("files");
@@ -53,11 +52,15 @@ function mediaFormPayload(form, tagIds){
   return payload;
 }
 const MAX_PARALLEL_UPLOADS = 3;
-async function uploadFileDirectToSupabase(file){
-  const signed=await request("/api/media/upload-sign",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,contentType:file.type,size:file.size})});
-  let response;try{response=await fetch(signed.signed_url,{method:"PUT",headers:signed.upload_headers||{},body:file});}catch{throw new Error("素材上传失败：无法连接到 Supabase Storage，请检查网络后重试。");}
+async function imageDimensions(file){
+  if(!file.type.startsWith("image/"))return {width:0,height:0};
+  try{const bitmap=await createImageBitmap(file);const dimensions={width:bitmap.width,height:bitmap.height};bitmap.close();return dimensions;}catch{return {width:0,height:0};}
+}
+async function uploadFile(file){
+  const signed=await request("/api/r2/upload-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"legacy-media",filename:file.name,contentType:file.type,size:file.size})});
+  let response;try{response=await fetch(signed.signed_url,{method:"PUT",headers:signed.upload_headers||{},body:file});}catch{throw new Error("素材上传失败：无法连接到对象存储，请检查 R2 CORS 与网络后重试。");}
   if(!response.ok){const detail=await response.text().catch(()=>"");throw new Error(`Storage upload failed (${response.status}): ${detail || "please check the file and try again"}`);}
-  return signed;
+  return {...signed,filename:signed.object_key.split("/").pop(),storage_path:signed.object_key,public_url:signed.url,originalname:file.name,mimetype:file.type||signed.content_type,size:file.size,storage_provider:"r2",...await imageDimensions(file)};
 }
 async function uploadMediaDirect(form, files, tagIds, statusTarget=mediaStatus){
   const uploaded=new Array(files.length);
@@ -66,7 +69,7 @@ async function uploadMediaDirect(form, files, tagIds, statusTarget=mediaStatus){
     while(nextIndex<files.length){
       const index=nextIndex++;
       if(statusTarget)statusTarget.textContent=`正在上传 ${index+1}/${files.length}：${files[index].name}`;
-      uploaded[index]=await uploadFileDirectToSupabase(files[index]);
+      uploaded[index]=await uploadFile(files[index]);
     }
   };
   await Promise.all(Array.from({length:Math.min(MAX_PARALLEL_UPLOADS,files.length)},worker));

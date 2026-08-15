@@ -1,8 +1,8 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { uploadFile } from "@/lib/storage-client";
 import type { CreativeGraphData, CreativeGraphLink, CreativeGraphNode } from "@/lib/creative-graph";
 import { defaultCreativeGraph } from "@/lib/creative-graph";
 import { AdminGraphCanvas } from "./AdminGraphCanvas";
@@ -11,8 +11,6 @@ import imageStyles from "./graph-image-fields.module.css";
 
 const emptyNode = (): CreativeGraphNode => ({ id: "", name: "", category: "未分类", summary: "", detail: "", level: "node", status: "active", link: "", image: "", image_alt: "" });
 const safeId = (value: string) => value.trim().toLocaleLowerCase("zh-CN").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || `node-${Date.now()}`;
-const safeName = (value: string) => value.normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, "-").slice(0, 120) || "graph-node-image";
-
 export function GraphAdminClient() {
   const [graph, setGraph] = useState<CreativeGraphData>(defaultCreativeGraph);
   const [draft, setDraft] = useState<CreativeGraphNode>(emptyNode());
@@ -36,9 +34,9 @@ export function GraphAdminClient() {
       setImageUploading(true); setError(false); setStatus(`正在上传节点图片：${file.name}`);
       if (!file.type.startsWith("image/")) throw new Error("节点详情只能上传图片文件。");
       if (file.size > 20 * 1024 * 1024) throw new Error("节点图片不能超过 20 MB。");
-      const blob = await upload(`portfolio/admin/graph-nodes/${safeName(file.name)}`, file, {
-        access: "public", handleUploadUrl: "/api/blob/upload", clientPayload: JSON.stringify({ kind: "media" }),
-        onUploadProgress: ({ percentage }) => setStatus(`正在上传节点图片 · ${Math.round(percentage)}%`)
+      const blob = await uploadFile(file, {
+        kind: "graph",
+        onProgress: (percentage) => setStatus(`正在上传节点图片 · ${Math.round(percentage)}%`)
       });
       setDraft((current) => ({ ...current, image: blob.url, image_alt: current.image_alt || current.name || file.name.replace(/\.[^.]+$/, "") }));
       setStatus("图片已上传并加入当前节点，请更新节点后再保存到网站。");

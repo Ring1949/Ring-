@@ -47,7 +47,7 @@ async function uploadHeroBackgroundFile(file) {
       body
     });
   } catch {
-    throw new Error("主视觉文件上传失败：无法连接到 Supabase Storage，请检查网络后重试。");
+    throw new Error("主视觉文件上传失败：无法连接到对象存储，请检查 R2 CORS 与网络后重试。");
   }
   if (!uploadResponse.ok) {
     const detail = await uploadResponse.text().catch(() => "");

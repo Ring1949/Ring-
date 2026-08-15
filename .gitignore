@@ -18,3 +18,5 @@ npm-debug.log*
 .photo-import-tools/
 docs/data-backups/
 tsconfig.tsbuildinfo
+.r2-migration-state.json
+logs/r2-migration.jsonl

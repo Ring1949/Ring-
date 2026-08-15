@@ -8,7 +8,7 @@ import {
   MEDIA_FILE_PREFIX,
   savePortfolioCoverOverrides,
   storageErrorMessage,
-  verifyUploadedBlob
+  verifyUploadedObject
 } from "@/lib/blob-library";
 import { basePortfolioCategories, basePortfolioProjects } from "@/lib/portfolio-state";
 import { requireAdmin } from "@/lib/utils";
@@ -31,12 +31,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "没有找到要设置封面的作品或分类。" }, { status: 404 });
     }
     const maximumSize = Math.min(Number(process.env.MEDIA_FILE_MAX_BYTES) || DEFAULT_MEDIA_MAX_BYTES, MAX_COVER_BYTES);
-    const metadata = await verifyUploadedBlob({
+    const metadata = await verifyUploadedObject({
       url: String(body.url || ""),
       pathname: String(body.pathname || ""),
       expectedSize: Number(body.size) || 0,
       prefix: MEDIA_FILE_PREFIX,
-      maximumSize
+      maximumSize,
+      storageProvider: String(body.storage_provider || body.storageProvider || body.provider || "")
     });
     if (!metadata.contentType?.startsWith("image/")) {
       return NextResponse.json({ error: "封面必须是图片文件。" }, { status: 400 });

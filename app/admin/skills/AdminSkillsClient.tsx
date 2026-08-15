@@ -1,21 +1,17 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { uploadFile } from "@/lib/storage-client";
 import styles from "../library-admin.module.css";
 
 type Skill = { id: string; name: string; category_name: string; description: string; original_name: string; size: number; download_path: string };
 type Category = { id: string; name: string; slug: string };
-type UploadedBlob = { url: string; downloadUrl: string; pathname: string; contentType: string };
+type UploadedBlob = Awaited<ReturnType<typeof uploadFile>>;
 type Pending = { blob: UploadedBlob; file: File };
 
 function fileSize(bytes: number) {
   return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function safeName(name: string) {
-  return name.normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, "-").slice(0, 120) || "skill-file";
 }
 
 function readableUploadError(reason: unknown) {
@@ -56,7 +52,8 @@ export function AdminSkillsClient() {
       body: JSON.stringify({
         name: values.get("name"), category_name: values.get("category_name"), description: values.get("description"),
         original_name: uploaded.file.name, size: uploaded.file.size, content_type: uploaded.file.type || uploaded.blob.contentType,
-        url: uploaded.blob.url, pathname: uploaded.blob.pathname, download_url: uploaded.blob.downloadUrl
+        url: uploaded.blob.url, pathname: uploaded.blob.pathname, download_url: uploaded.blob.downloadUrl,
+        storage_provider: uploaded.blob.storageProvider, object_key: uploaded.blob.objectKey
       })
     });
     const payload = await response.json();
@@ -73,13 +70,10 @@ export function AdminSkillsClient() {
       const file = (form.elements.namedItem("file") as HTMLInputElement).files?.[0];
       if (!file) throw new Error("请选择 Skill 文件。");
       if (file.size > 100 * 1024 * 1024) throw new Error("单个 Skill 文件上限为 100 MB；删除照片无法改变单文件上限。需要更大文件时请使用分卷 ZIP。");
-      setStatus(`正在直传 ${file.name}，文件不会经过 Vercel 临时目录…`); setProgress(1);
-      const blob = await upload(`skill-library/files/${safeName(file.name)}`, file, {
-        access: "public",
-        handleUploadUrl: "/api/blob/upload",
-        clientPayload: JSON.stringify({ kind: "skill" }),
-        multipart: file.size > 50 * 1024 * 1024,
-        onUploadProgress: ({ percentage }) => setProgress(Math.max(1, Math.round(percentage)))
+      setStatus(`正在直传 ${file.name}，文件本体不会经过 Vercel Server Function…`); setProgress(1);
+      const blob = await uploadFile(file, {
+        kind: "skill",
+        onProgress: (percentage) => setProgress(Math.max(1, Math.round(percentage)))
       });
       const uploaded = { blob, file }; setPending(uploaded); setStatus("文件上传完成，正在校验大小并保存 Skill 资料…");
       await saveRecord(form, uploaded);
@@ -108,7 +102,7 @@ export function AdminSkillsClient() {
         <div className={`${styles.progress} ${styles.fieldWide}`}><span style={{ width: `${progress}%` }} /></div>
         <div className={`${styles.status} ${error ? styles.statusError : ""}`}>{status}</div>
         <button className={`${styles.button} ${styles.fieldWide}`} disabled={busy}>{busy ? "正在处理…" : pending ? "重试保存资料" : "上传并永久保存"}</button>
-      </form><p className={styles.note}>使用网站现有的 Vercel Blob 浏览器直传，不增加新的存储库，也不写入 Vercel 临时目录。上传后会校验路径和文件大小。</p></section>
+      </form><p className={styles.note}>新文件优先由浏览器直传 Cloudflare R2；未配置 R2 时保留现有 Vercel Blob 兼容路径。上传后会校验路径和文件大小。</p></section>
       <section className={styles.panel}><div className={styles.listHead}><h2>已保存 Skill</h2><Link className={`${styles.button} ${styles.secondary}`} href="/api/skills/export">导出清单</Link></div><div className={styles.list}>{skills.length ? skills.map((skill) => <article className={styles.row} key={skill.id}><div><h3>{skill.name} · {skill.category_name}</h3><p>{skill.original_name} · {fileSize(skill.size)}{skill.description ? ` · ${skill.description}` : ""}</p></div><div className={styles.rowActions}><Link href={skill.download_path}>下载</Link><button className={styles.danger} onClick={() => remove(skill)}>删除</button></div></article>) : <div className={styles.empty}>还没有 Skill。上传后会立即出现在扩展页面。</div>}</div></section>
     </div>
   </>;

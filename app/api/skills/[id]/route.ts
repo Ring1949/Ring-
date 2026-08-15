@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSkillManifest, removeBlobFile, saveSkillManifest, slugifyLabel } from "@/lib/blob-library";
+import { getSkillManifest, removeStoredFile, saveSkillManifest, slugifyLabel } from "@/lib/blob-library";
 import { requireAdmin } from "@/lib/utils";
 
 type Context = { params: Promise<{ id: string }> };
@@ -49,7 +49,7 @@ export async function DELETE(request: NextRequest, context: Context) {
     const manifest = await getSkillManifest();
     const record = manifest.skills.find((item) => item.id === id);
     if (!record) return NextResponse.json({ error: "Skill 不存在或已经被删除。" }, { status: 404 });
-    await removeBlobFile(record.url);
+    await removeStoredFile({ url: record.url, pathname: record.pathname, storageProvider: record.storage_provider });
     manifest.skills = manifest.skills.filter((item) => item.id !== id);
     await saveSkillManifest(manifest);
     return NextResponse.json({ deleted: true });

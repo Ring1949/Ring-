@@ -50,10 +50,14 @@ create table if not exists public.media (
   description text default '',
   file_path text not null,
   storage_path text default '',
+  object_key text default '',
+  storage_provider text default 'supabase',
   original_name text default '',
   file_type text default '',
   mime_type text default '',
   size bigint default 0,
+  width integer default 0,
+  height integer default 0,
   media_type text default 'image',
   tags text default '',
   camera text default '',
@@ -98,6 +102,7 @@ create index if not exists idx_media_project on public.media(project_id, sort_or
 create index if not exists idx_media_category on public.media(category_id, sort_order, id);
 create index if not exists idx_media_database on public.media(show_in_database, is_selected, sort_order, id);
 create index if not exists idx_media_hero on public.media(is_hero, updated_at desc, sort_order, id desc);
+create index if not exists idx_media_storage_object on public.media(storage_provider, object_key);
 
 insert into public.settings (key, value, updated_at) values
   ('site_name','山川行止',now()),

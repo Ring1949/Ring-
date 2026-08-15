@@ -9,7 +9,7 @@ import {
   slugifyLabel,
   SKILL_FILE_PREFIX,
   storageErrorMessage,
-  verifyUploadedBlob
+  verifyUploadedObject
 } from "@/lib/blob-library";
 import { requireAdmin } from "@/lib/utils";
 
@@ -42,12 +42,13 @@ export async function POST(request: NextRequest) {
     if (!name) return NextResponse.json({ error: "请填写 Skill 名称。" }, { status: 400 });
     const size = Number(body.size) || 0;
     const maximumSize = Number(process.env.SKILL_FILE_MAX_BYTES) || DEFAULT_SKILL_MAX_BYTES;
-    const metadata = await verifyUploadedBlob({
+    const metadata = await verifyUploadedObject({
       url: String(body.url || ""),
       pathname: String(body.pathname || ""),
       expectedSize: size,
       prefix: SKILL_FILE_PREFIX,
-      maximumSize
+      maximumSize,
+      storageProvider: String(body.storage_provider || body.storageProvider || body.provider || "")
     });
     const manifest = await getSkillManifest();
     const categorySlug = slugifyLabel(categoryName, "other");
@@ -82,7 +83,9 @@ export async function POST(request: NextRequest) {
       storage_state: "verified" as const,
       created_at: timestamp,
       updated_at: timestamp,
-      last_verified_at: timestamp
+      last_verified_at: timestamp,
+      storage_provider: metadata.provider,
+      object_key: metadata.pathname
     };
     manifest.skills.unshift(record);
     const saved = await saveSkillManifest(manifest);

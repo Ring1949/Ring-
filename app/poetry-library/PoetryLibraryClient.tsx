@@ -1,9 +1,9 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 import { FormEvent,useEffect,useMemo,useRef,useState } from "react";
 import { CoverflowCarousel,type CoverflowSlide } from "@/components/ui/coverflow-carousel";
+import { uploadFile } from "@/lib/storage-client";
 import styles from "./poetry-library.module.css";
 import overlay from "./poetry-overlays.module.css";
 
@@ -22,7 +22,6 @@ const poems:Poem[]=[
 ];
 const tones=["#e7efd7","#f5e8dc","#dce9e6","#efe7d5","#e4e7f2","#f2e1e0","#e1ecdf","#ebe5d8"];
 function cover(poem:Poem,index:number){const bg=tones[index%tones.length],title=poem.title.replace(/[&<>]/g,""),line=poem.lines[0].replace(/[&<>]/g,"");const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" rx="50" fill="${bg}"/><circle cx="640" cy="130" r="170" fill="#fff" opacity=".34"/><path d="M80 610 Q220 390 360 610 T720 610 V800 H80Z" fill="#667d5d" opacity=".2"/><text x="70" y="90" fill="#52604d" font-family="serif" font-size="23" letter-spacing="5">${poem.dynasty} · ${poem.author}</text><text x="70" y="230" fill="#1e2b1e" font-family="serif" font-weight="700" font-size="68">${title}</text><text x="70" y="320" fill="#536051" font-family="serif" font-size="27">${line.slice(0,18)}</text><text x="70" y="690" fill="#536051" font-family="serif" font-size="21">${poem.theme}</text></svg>`;return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`}
-function safeFilename(name:string){const ext=name.includes(".")?`.${name.split(".").pop()!.replace(/[^a-z0-9]/gi,"").slice(0,8)}`:".jpg";return `poetry-${Date.now()}-${crypto.randomUUID()}${ext}`}
 
 export function PoetryLibraryClient(){
   const [saved,setSaved]=useState<SavedCard[]>([]),[selected,setSelected]=useState<CardView|null>(null),[editing,setEditing]=useState(false),[notice,setNotice]=useState("");const fileRef=useRef<HTMLInputElement>(null);
@@ -41,6 +40,6 @@ export function PoetryLibraryClient(){
 function CardEditor({close,saved,fileRef}:{close:()=>void;saved:()=>Promise<void>;fileRef:React.RefObject<HTMLInputElement|null>}){
   const [file,setFile]=useState<File|null>(null),[preview,setPreview]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
   const choose=(value:File|null)=>{if(!value)return;if(!value.type.startsWith("image/")){setMessage("请选择图片文件。");return}if(value.size>20*1024*1024){setMessage("封面图片最大为 20 MB。");return}setFile(value);setPreview(URL.createObjectURL(value));setMessage("")};
-  const submit=async(event:FormEvent<HTMLFormElement>)=>{event.preventDefault();if(!file){setMessage("请选择封面图片。");return}try{setBusy(true);setMessage("正在上传封面…");const blob=await upload(`poetry-library/images/${safeFilename(file.name)}`,file,{access:"public",handleUploadUrl:"/api/blob/upload",clientPayload:JSON.stringify({kind:"poetry"})});const values=new FormData(event.currentTarget),response=await fetch("/api/poetry-cards",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:values.get("title"),author:values.get("author"),image:{url:blob.url,pathname:blob.pathname,name:file.name,size:file.size}})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||"保存失败");await saved()}catch(error){setMessage(error instanceof Error?error.message:"保存失败")}finally{setBusy(false)}};
+  const submit=async(event:FormEvent<HTMLFormElement>)=>{event.preventDefault();if(!file){setMessage("请选择封面图片。");return}try{setBusy(true);setMessage("正在上传封面…");const uploaded=await uploadFile(file,{kind:"poetry"});const values=new FormData(event.currentTarget),response=await fetch("/api/poetry-cards",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:values.get("title"),author:values.get("author"),image:{url:uploaded.url,pathname:uploaded.pathname,name:file.name,size:file.size,storage_provider:"r2",object_key:uploaded.objectKey}})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||"保存失败");await saved()}catch(error){setMessage(error instanceof Error?error.message:"保存失败")}finally{setBusy(false)}};
   return <div className={overlay.editorBackdrop} onMouseDown={(event)=>{if(event.currentTarget===event.target)close()}}><section className={overlay.editor} role="dialog" aria-modal="true"><header><div><small>NEW CARD</small><h2>添加诗词卡片</h2></div><button onClick={close} aria-label="关闭">×</button></header><form onSubmit={submit}><button type="button" className={overlay.coverPicker} onClick={()=>fileRef.current?.click()}>{preview?<img src={preview} alt="封面预览"/>:<span>＋<small>选择封面图片</small></span>}</button><input ref={fileRef} type="file" accept="image/*" hidden onChange={(event)=>choose(event.target.files?.[0]||null)}/><label><span>底部文字</span><input name="title" required maxLength={80} placeholder="例如：春江花月夜"/></label><label><span>作者</span><input name="author" required maxLength={80} placeholder="例如：唐 · 张若虚"/></label>{message?<p>{message}</p>:null}<div className={overlay.editorActions}><button type="button" onClick={close}>取消</button><button disabled={busy}>{busy?"正在保存…":"保存卡片"}</button></div></form></section></div>
 }
