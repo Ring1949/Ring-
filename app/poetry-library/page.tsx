@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function PoetryLibraryPage() {
-  return <main className={styles.page}><PoetryLibraryClient /></main>;
+  return <main className={styles.page} style={{ position: "fixed", inset: 0 }}><PoetryLibraryClient /></main>;
 }
