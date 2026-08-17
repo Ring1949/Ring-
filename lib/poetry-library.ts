@@ -5,7 +5,7 @@ export const POETRY_IMAGE_PREFIX = "poetry-library/images/";
 const POETRY_MANIFEST_PREFIX = "site-state/v1/poetry-library/";
 export const POETRY_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 
-export type PoetryCardRecord = { id:string; title:string; author:string; image_url:string; image_pathname:string; image_name:string; storage_provider?:"r2"|"vercel-blob"; object_key?:string; created_at:string; updated_at:string };
+export type PoetryCardRecord = { id:string; title:string; author:string; content:string; position_x:number; position_y:number; image_url:string; image_pathname:string; image_name:string; storage_provider?:"r2"|"vercel-blob"; object_key?:string; created_at:string; updated_at:string };
 type PoetryManifest = { version:number; updated_at:string; cards:PoetryCardRecord[] };
 const empty=():PoetryManifest=>({version:1,updated_at:new Date(0).toISOString(),cards:[]});
 function token(){const value=process.env.BLOB_READ_WRITE_TOKEN;if(!value)throw new Error("网站尚未连接 Vercel Blob 持久存储。");return value}
