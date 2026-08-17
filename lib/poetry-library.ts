@@ -1,5 +1,5 @@
 import { get, list } from "@vercel/blob";
-import { r2Configured, readLatestR2Json, verifyR2Object, writeR2Json } from "@/lib/r2";
+import { deleteR2Object, r2Configured, readLatestR2Json, verifyR2Object, writeR2Json } from "@/lib/r2";
 
 export const POETRY_IMAGE_PREFIX = "poetry-library/images/";
 const POETRY_MANIFEST_PREFIX = "site-state/v1/poetry-library/";
@@ -29,4 +29,8 @@ export async function verifyPoetryImage(image:{url:string;pathname:string;object
   if(image.size<=0||image.size>POETRY_IMAGE_MAX_BYTES)throw new Error("封面图片最大为 20 MB。");
   const metadata=await verifyR2Object(objectKey,image.size);
   if(!String(metadata.contentType||"").startsWith("image/"))throw new Error("只能上传图片文件。");
+}
+
+export async function removePoetryImage(record:Pick<PoetryCardRecord,"storage_provider"|"object_key">){
+  if(record.storage_provider==="r2"&&record.object_key)await deleteR2Object(record.object_key);
 }
