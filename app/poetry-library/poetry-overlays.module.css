@@ -1,5 +1,5 @@
-.lightbox{position:fixed;inset:0;z-index:80;padding:34px;display:grid;place-items:center;background:rgba(14,17,14,.82);backdrop-filter:blur(22px)}
-.lightboxClose{position:absolute;right:28px;top:24px;z-index:2;width:40px;height:40px;border:1px solid rgba(255,255,255,.22);border-radius:50%;background:rgba(255,255,255,.08);color:#fff;font-size:24px;cursor:pointer}
+.lightbox{position:fixed;inset:0;z-index:80;padding:34px;display:grid;place-items:center;background:transparent;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+.lightboxClose{position:absolute;right:28px;top:24px;z-index:2;width:40px;height:40px;border:1px solid rgba(25,30,24,.14);border-radius:50%;background:rgba(255,255,255,.62);backdrop-filter:blur(12px);color:#253024;font-size:24px;cursor:pointer;box-shadow:0 8px 24px rgba(30,38,28,.08)}
 .lightbox>img{display:block;width:auto;height:auto;max-width:min(94vw,1400px);max-height:90vh;object-fit:contain;border-radius:18px;box-shadow:0 30px 100px rgba(0,0,0,.46)}
 .lightboxDelete{position:absolute;right:28px;bottom:24px;z-index:2;padding:10px 15px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(34,20,20,.64);backdrop-filter:blur(14px);color:#fff;font:600 12px/1 inherit;cursor:pointer}.lightboxDelete:hover{background:rgba(126,35,35,.78)}.lightboxDelete:disabled{opacity:.55;cursor:wait}
 .editorBackdrop{position:fixed;inset:0;z-index:90;padding:24px;display:grid;place-items:center;background:rgba(26,31,25,.32);backdrop-filter:blur(18px)}
