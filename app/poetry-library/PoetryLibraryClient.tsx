@@ -25,7 +25,7 @@ function cover(poem:Poem,index:number){const bg=tones[index%tones.length],title=
 
 export function PoetryLibraryClient(){
   const [saved,setSaved]=useState<SavedCard[]>([]),[selected,setSelected]=useState<CardView|null>(null),[editing,setEditing]=useState(false),[notice,setNotice]=useState("");const fileRef=useRef<HTMLInputElement>(null);
-  const load=async()=>{const response=await fetch("/api/poetry-cards",{cache:"no-store"}),payload=await response.json();if(!response.ok)throw new Error(payload.error||"卡片读取失败");setSaved(payload.cards||[])};
+  const load=async()=>{const response=await fetch("/api/poetry-cards",{cache:"no-store"}),payload=await response.json();if(!response.ok)throw new Error(payload.error||"卡片读取失败");setSaved(Array.isArray(payload.cards)?payload.cards.filter((card:unknown):card is SavedCard=>Boolean(card)&&typeof card==="object"&&"id" in card&&"image_url" in card):[])};
   useEffect(()=>{load().catch((error)=>setNotice(error.message))},[]);
   const cards=useMemo<CardView[]>(()=>[...poems.map((poem,index)=>({id:poem.id,title:poem.title,author:`${poem.dynasty} · ${poem.author}`,src:poem.image||cover(poem,index),lines:poem.lines,position:"50% 50%"})),...saved.map((card)=>({id:card.id,title:card.title,author:card.author,src:card.image_url,lines:String(card.content||"").split(/\r?\n/).map((line)=>line.trim()).filter(Boolean),position:`${card.position_x??50}% ${card.position_y??50}%`}))],[saved]);
   const slides=useMemo<CoverflowSlide[]>(()=>cards.map((card)=>({src:card.src,alt:`${card.title}封面`,title:card.title,subtitle:card.author,objectPosition:card.position})),[cards]);
