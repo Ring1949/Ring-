@@ -163,6 +163,76 @@ bootstrap().catch((error)=>{
   document.body.innerHTML=`<main class="admin-load-error"><h1>后台加载失败</h1><p>${escapeHtml(error.message)}</p><a href="/">返回首页</a></main>`;
 });
 
+/* Persistent series batch deletion */
+const seriesBatchState={active:false,selected:new Set(),busy:false};
+function visibleSeriesProjects(){
+  const filter=document.querySelector("#project-filter")?.value||"";
+  const series=state.projects.filter(item=>Number(item.is_series)===1);
+  return filter?series.filter(item=>item.status===filter):series;
+}
+function ensureSeriesBatchToolbar(){
+  if(document.querySelector("#series-batch-toolbar"))return;
+  const toolbar=document.createElement("div");
+  toolbar.id="series-batch-toolbar";
+  toolbar.className="media-batch-toolbar series-batch-toolbar";
+  toolbar.innerHTML='<button data-series-batch-start>批量选择</button><button data-series-batch-all hidden>全选当前列表</button><span data-series-batch-count hidden>已选择 0 个系列</span><button class="danger" data-series-batch-delete hidden disabled>删除所选</button><button data-series-batch-cancel hidden>取消</button>';
+  document.querySelector("#project-list")?.before(toolbar);
+}
+function refreshSeriesBatchUI(){
+  ensureSeriesBatchToolbar();
+  const toolbar=document.querySelector("#series-batch-toolbar");
+  if(!toolbar)return;
+  const active=seriesBatchState.active,count=seriesBatchState.selected.size,items=visibleSeriesProjects();
+  toolbar.querySelector("[data-series-batch-start]").hidden=active;
+  ["[data-series-batch-all]","[data-series-batch-count]","[data-series-batch-delete]","[data-series-batch-cancel]"].forEach(selector=>toolbar.querySelector(selector).hidden=!active);
+  toolbar.querySelector("[data-series-batch-count]").textContent=seriesBatchState.busy?`正在删除…`:`已选择 ${count} 个系列`;
+  toolbar.querySelector("[data-series-batch-delete]").disabled=!count||seriesBatchState.busy;
+  toolbar.querySelector("[data-series-batch-all]").disabled=seriesBatchState.busy;
+  toolbar.querySelector("[data-series-batch-cancel]").disabled=seriesBatchState.busy;
+  toolbar.querySelector("[data-series-batch-all]").textContent=items.length&&items.every(item=>seriesBatchState.selected.has(String(item.id)))?"取消全选":"全选当前列表";
+  document.querySelectorAll("#project-list .admin-row").forEach((card,index)=>{
+    const item=items[index];if(!item)return;
+    const id=String(item.id);card.dataset.batchSeriesId=id;
+    card.classList.toggle("batch-mode",active);card.classList.toggle("selected",seriesBatchState.selected.has(id));
+    card.querySelector(".series-select-control")?.remove();
+    if(active){const control=document.createElement("label");control.className="media-select-control series-select-control";control.innerHTML=`<input type="checkbox" ${seriesBatchState.selected.has(id)?"checked":""} aria-label="选择${escapeHtml(item.title||"系列")}"><span></span>`;card.prepend(control);}
+  });
+}
+const originalRenderProjects=renderProjects;
+renderProjects=function(){originalRenderProjects();requestAnimationFrame(refreshSeriesBatchUI);};
+document.querySelector("#project-filter")?.addEventListener("change",()=>{
+  seriesBatchState.selected.clear();
+  requestAnimationFrame(refreshSeriesBatchUI);
+});
+document.addEventListener("click",async(event)=>{
+  if(event.target.closest("[data-series-batch-start]")){seriesBatchState.active=true;seriesBatchState.selected.clear();refreshSeriesBatchUI();return;}
+  if(event.target.closest("[data-series-batch-cancel]")){seriesBatchState.active=false;seriesBatchState.selected.clear();refreshSeriesBatchUI();return;}
+  if(event.target.closest("[data-series-batch-all]")){
+    const items=visibleSeriesProjects();
+    if(items.length&&items.every(item=>seriesBatchState.selected.has(String(item.id))))items.forEach(item=>seriesBatchState.selected.delete(String(item.id)));
+    else items.forEach(item=>seriesBatchState.selected.add(String(item.id)));
+    refreshSeriesBatchUI();return;
+  }
+  const card=event.target.closest("#project-list .admin-row.batch-mode");
+  if(card&&!event.target.closest(".row-actions")&&!seriesBatchState.busy){
+    const id=String(card.dataset.batchSeriesId);seriesBatchState.selected.has(id)?seriesBatchState.selected.delete(id):seriesBatchState.selected.add(id);refreshSeriesBatchUI();return;
+  }
+  if(event.target.closest("[data-series-batch-delete]")){
+    const ids=[...seriesBatchState.selected];
+    if(!ids.length||!confirm(`确定删除选中的 ${ids.length} 个系列吗？关联内容将从网站移除，此操作无法撤销。`))return;
+    seriesBatchState.busy=true;refreshSeriesBatchUI();
+    let succeeded=0;const failures=[];
+    for(let index=0;index<ids.length;index+=1){
+      document.querySelector("[data-series-batch-count]").textContent=`正在删除 ${index+1}/${ids.length}`;
+      try{await request(`/api/projects/${encodeURIComponent(ids[index])}`,{method:"DELETE"});succeeded+=1;}
+      catch(error){failures.push(error?.message||String(error));}
+    }
+    seriesBatchState.busy=false;seriesBatchState.active=false;seriesBatchState.selected.clear();
+    await loadAll();
+    notify(failures.length?`已删除 ${succeeded} 个系列，${failures.length} 个失败`:`已删除 ${succeeded} 个系列`,failures.length>0);
+  }
+});
+
 /* Batch media deletion */
 const mediaBatchState={active:false,selected:new Set()};
 function ensureMediaBatchToolbar(){
