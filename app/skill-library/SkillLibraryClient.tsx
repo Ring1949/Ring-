@@ -10,11 +10,13 @@ type Skill = {
   id: string; name: string; category_name: string; category_slug: string; description: string;
   original_name: string; size: number; content_type: string; version: number;
   download_path: string; created_at: string; updated_at: string;
+  preview_url?: string; preview_pathname?: string; preview_name?: string;
 };
 type UploadedSkill = {
   url: string; pathname: string; download_url: string; storage_provider: "r2"; object_key: string;
   original_name: string; size: number; content_type: string;
 };
+type UploadedPreview = { url: string; pathname: string; name: string; size: number; storage_provider: "r2"; object_key: string };
 
 const palettes = ["#EAF2FF", "#EEF7EC", "#F1EDFF", "#FFF0F0", "#FFF5E5", "#EDF4F8"];
 
@@ -30,10 +32,12 @@ function relativeDate(value: string) {
 }
 function toneFor(id: string) { return palettes[Math.abs(id.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0)) % palettes.length]; }
 function DownloadIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>; }
+function CopyIcon({ checked = false }: { checked?: boolean }) { return checked ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>; }
+async function copyText(value: string) { try { await navigator.clipboard.writeText(value); return; } catch { /* use compatible fallback */ } const area = document.createElement("textarea"); area.value = value; area.setAttribute("readonly", ""); area.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(area); area.select(); const copied = document.execCommand("copy"); area.remove(); if (!copied) throw new Error("浏览器未允许复制，请手动输入 Skill 名称。"); }
 
 export function SkillLibraryClient() {
   const [skills, setSkills] = useState<Skill[]>([]), [categories, setCategories] = useState<Category[]>([]), [query, setQuery] = useState(""), [status, setStatus] = useState("正在读取 Skill 库…");
-  const [menu, setMenu] = useState(""), [editing, setEditing] = useState<Skill | null | undefined>(undefined), [detail, setDetail] = useState<Skill | null>(null), [busy, setBusy] = useState(false), [page, setPage] = useState(0);
+  const [menu, setMenu] = useState(""), [copied, setCopied] = useState(""), [editing, setEditing] = useState<Skill | null | undefined>(undefined), [detail, setDetail] = useState<Skill | null>(null), [busy, setBusy] = useState(false), [page, setPage] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const load = async () => { const response = await fetch(`/api/skills?fresh=${Date.now()}`, { cache: "no-store" }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "Skill 库读取失败"); setSkills(payload.skills || []); setCategories(payload.categories || []); setStatus(""); };
   useEffect(() => { load().catch((reason) => setStatus(reason.message)); }, []);
@@ -42,6 +46,7 @@ export function SkillLibraryClient() {
   useEffect(() => setPage(0), [query]);
   const pageCount = Math.max(1, Math.ceil(visible.length / 6)), pageItems = visible.slice(page * 6, page * 6 + 6), detailIndex = detail ? visible.findIndex((item) => item.id === detail.id) : -1;
   const moveDetail = (direction: -1 | 1) => { if (!visible.length) return; const current = detailIndex < 0 ? 0 : detailIndex; setDetail(visible[(current + direction + visible.length) % visible.length]); };
+  const copyInvocation = async (skill: Skill) => { try { await copyText(`@${skill.name}`); setCopied(skill.id); setTimeout(() => setCopied((current) => current === skill.id ? "" : current), 1500); } catch (error) { alert(error instanceof Error ? error.message : "复制失败"); } };
   const remove = async (skill: Skill) => { setMenu(""); if (!confirm(`确定删除 Skill「${skill.name}」和它保存的文件吗？`)) return; const response = await fetch(`/api/skills/${skill.id}`, { method: "DELETE" }); const payload = await response.json(); if (!response.ok) { alert(payload.error || "删除失败"); return; } setDetail((current) => current?.id === skill.id ? null : current); setSkills((all) => all.filter((item) => item.id !== skill.id)); };
 
   return <main className={styles.page} onClick={() => setMenu("")}>
@@ -50,14 +55,16 @@ export function SkillLibraryClient() {
       <div className={styles.titleRow}><h1>Skill 库</h1><button className={styles.add} type="button" aria-label="添加 Skill" onClick={(event) => { event.stopPropagation(); setEditing(null); }}>＋</button></div>
       <label className={styles.search}><span aria-hidden="true"/><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 Skill..."/><kbd>⌘K</kbd></label>
       {status ? <div className={styles.notice}>{status}</div> : null}
-      <section className={styles.grid} aria-live="polite">{pageItems.map((skill) => <article key={skill.id} className={styles.card} style={{ ["--card-tone" as string]: toneFor(skill.id) }}>
+      <section className={styles.grid} aria-live="polite">{pageItems.map((skill) => { const hasPreview = Boolean(skill.preview_url); return <article key={skill.id} className={`${styles.card} ${hasPreview ? styles.cardWithImage : styles.cardPlain}`} style={{ ["--card-tone" as string]: toneFor(skill.id) }}>
+        {hasPreview ? <div className={styles.cardMedia} aria-hidden="true"><img src={skill.preview_url} alt=""/><span/></div> : null}
         <button type="button" className={styles.cardOpen} aria-label={`打开 Skill「${skill.name}」`} onClick={() => setDetail(skill)}/>
         <div className={styles.cardBody}><div className={styles.cardActions}>
           <a href={skill.download_path} className={styles.downloadButton} aria-label={`下载 ${skill.name}`} title="下载文件" onClick={(event) => event.stopPropagation()}><DownloadIcon/></a>
+          <button type="button" className={styles.copyButton} aria-label={copied === skill.id ? `${skill.name} 调用名称已复制` : `复制 @${skill.name}`} title={copied === skill.id ? "已复制" : `复制 @${skill.name}`} onClick={(event) => { event.stopPropagation(); void copyInvocation(skill); }}><CopyIcon checked={copied === skill.id}/>{copied === skill.id ? <span className={styles.copyTip}>已复制 @{skill.name}</span> : null}</button>
           <button type="button" aria-label={`编辑 ${skill.name}`} title="更多" onClick={(event) => { event.stopPropagation(); setMenu((current) => current === skill.id ? "" : skill.id); }}>•••</button>
-          {menu === skill.id ? <div className={styles.menu} onClick={(event) => event.stopPropagation()}><button onClick={() => { setEditing(skill); setMenu(""); }}>编辑 Skill</button><a href={skill.download_path}>下载文件</a><button className={styles.danger} onClick={() => void remove(skill)}>删除 Skill</button></div> : null}
+          {menu === skill.id ? <div className={styles.menu} onClick={(event) => event.stopPropagation()}><button onClick={() => { setEditing(skill); setMenu(""); }}>编辑 Skill</button><button onClick={() => { setEditing(skill); setMenu(""); }}>{hasPreview ? "更换或删除效果图" : "插入效果图"}</button><a href={skill.download_path}>下载文件</a><button className={styles.danger} onClick={() => void remove(skill)}>删除 Skill</button></div> : null}
         </div><h2>{skill.name}</h2><p>{skill.description || "这个 Skill 暂时没有说明。"}</p><div className={styles.cardFooter}><div className={styles.tags}><span>{skill.category_name}</span><span>v{skill.version}</span></div><div className={styles.meta}>{relativeDate(skill.updated_at)} · {fileSize(skill.size)}</div></div></div>
-      </article>)}</section>
+      </article>})}</section>
       {pageCount > 1 ? <nav className={styles.pagination} aria-label="Skill 分页"><button disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>上一页</button><span>{page + 1} / {pageCount}</span><button disabled={page >= pageCount - 1} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>下一页</button></nav> : null}
       {!status && !visible.length ? <div className={styles.empty}>没有找到符合条件的 Skill。</div> : null}
     </section>
@@ -69,11 +76,44 @@ export function SkillLibraryClient() {
 function SkillDetail({ skill, close, previous, next, canNavigate, edit }: { skill: Skill; close: () => void; previous: () => void; next: () => void; canNavigate: boolean; edit: () => void }) {
   const wheelAt = useRef(0);
   useEffect(() => { const overflow = document.body.style.overflow; document.body.style.overflow = "hidden"; const key = (event: KeyboardEvent) => { if (event.key === "Escape") close(); else if (canNavigate && event.key === "ArrowLeft") { event.preventDefault(); previous(); } else if (canNavigate && event.key === "ArrowRight") { event.preventDefault(); next(); } }; const wheel = (event: WheelEvent) => { if (!canNavigate) return; const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX; if (Math.abs(delta) < 8) return; event.preventDefault(); const now = performance.now(); if (now - wheelAt.current < 480) return; wheelAt.current = now; delta > 0 ? next() : previous(); }; window.addEventListener("keydown", key); window.addEventListener("wheel", wheel, { passive: false }); return () => { document.body.style.overflow = overflow; window.removeEventListener("keydown", key); window.removeEventListener("wheel", wheel); }; }, [canNavigate, close, next, previous]);
-  return <div className={styles.backdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) close(); }}>{canNavigate ? <div className={styles.detailNav}><button type="button" aria-label="上一个 Skill" onClick={previous}>←</button><button type="button" aria-label="下一个 Skill" onClick={next}>→</button></div> : null}<article className={styles.detail} role="dialog" aria-modal="true" aria-label={`${skill.name} 详情`}><button className={styles.detailClose} onClick={close} aria-label="关闭">×</button><small>{skill.category_name} · v{skill.version}</small><h2>{skill.name}</h2><p>{skill.description || "这个 Skill 暂时没有说明。"}</p><dl><div><dt>文件</dt><dd>{skill.original_name}</dd></div><div><dt>大小</dt><dd>{fileSize(skill.size)}</dd></div><div><dt>类型</dt><dd>{skill.content_type || "未知"}</dd></div><div><dt>更新</dt><dd>{relativeDate(skill.updated_at)}</dd></div></dl><footer><button type="button" onClick={edit}>编辑资料</button><a href={skill.download_path}>下载 Skill</a></footer></article></div>;
+  return <div className={styles.backdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) close(); }}>{canNavigate ? <div className={styles.detailNav}><button type="button" aria-label="上一个 Skill" onClick={previous}>←</button><button type="button" aria-label="下一个 Skill" onClick={next}>→</button></div> : null}<article className={styles.detail} role="dialog" aria-modal="true" aria-label={`${skill.name} 详情`}><button className={styles.detailClose} onClick={close} aria-label="关闭">×</button>{skill.preview_url ? <img src={skill.preview_url} alt={`${skill.name} 效果预览`}/> : null}<small>{skill.category_name} · v{skill.version}</small><h2>{skill.name}</h2><p>{skill.description || "这个 Skill 暂时没有说明。"}</p><dl><div><dt>调用</dt><dd>@{skill.name}</dd></div><div><dt>文件</dt><dd>{skill.original_name}</dd></div><div><dt>大小</dt><dd>{fileSize(skill.size)}</dd></div><div><dt>类型</dt><dd>{skill.content_type || "未知"}</dd></div><div><dt>更新</dt><dd>{relativeDate(skill.updated_at)}</dd></div></dl><footer><button type="button" onClick={edit}>编辑资料</button><a href={skill.download_path}>下载 Skill</a></footer></article></div>;
 }
 
 function SkillEditor({ skill, categories, busy, setBusy, close, saved }: { skill: Skill | null; categories: Category[]; busy: boolean; setBusy: (value: boolean) => void; close: () => void; saved: () => Promise<void> }) {
   const [file, setFile] = useState<File | null>(null), [progress, setProgress] = useState(0), [message, setMessage] = useState("");
-  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = event.currentTarget; try { setBusy(true); setMessage(""); if (!skill && !file) throw new Error("请选择要保存的 Skill 文件。"); if (file && file.size > 100 * 1024 * 1024) throw new Error("单个 Skill 文件最大为 100 MB。"); let uploaded: UploadedSkill | undefined; if (file) { setMessage(`正在上传 ${file.name}…`); setProgress(1); const blob = await uploadFile(file, { kind: "skill", onProgress: (value) => setProgress(Math.max(1, Math.round(value))) }); uploaded = { url: blob.url, pathname: blob.pathname, download_url: blob.downloadUrl, storage_provider: "r2", object_key: blob.objectKey, original_name: file.name, size: file.size, content_type: file.type || blob.contentType }; } setMessage("正在永久保存 Skill…"); const values = new FormData(form); const body: Record<string, unknown> = { name: values.get("name"), category_name: values.get("category_name"), description: values.get("description") }; if (uploaded) Object.assign(body, uploaded); const response = await fetch(skill ? `/api/skills/${skill.id}` : "/api/skills", { method: skill ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "Skill 保存失败"); setProgress(100); await saved(); } catch (error) { setMessage(error instanceof Error ? error.message : "Skill 保存失败"); } finally { setBusy(false); } };
-  return <div className={styles.backdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) close(); }}><section className={styles.editor} role="dialog" aria-modal="true"><div className={styles.editorHead}><div><p>{skill ? "EDIT SKILL" : "NEW SKILL"}</p><h2>{skill ? "编辑 Skill" : "添加 Skill"}</h2></div><button type="button" onClick={close} aria-label="关闭">×</button></div><form onSubmit={submit}><label><span>Skill 名称</span><input name="name" defaultValue={skill?.name} required maxLength={80}/></label><label><span>分类（可直接新建）</span><input name="category_name" defaultValue={skill?.category_name} list="skill-categories" required maxLength={40}/><datalist id="skill-categories">{categories.map((category) => <option key={category.id} value={category.name}/>)}</datalist></label><label className={styles.wide}><span>说明</span><textarea name="description" defaultValue={skill?.description} rows={4} maxLength={400} placeholder="说明这个 Skill 解决什么问题、如何使用。"/></label><label className={`${styles.filePicker} ${styles.wide}`}><input type="file" onChange={(event) => { const selected = event.target.files?.[0] || null; setFile(selected); setProgress(0); setMessage(""); }}/><span>{file ? `已选择：${file.name} · ${fileSize(file.size)}` : skill ? `当前文件：${skill.original_name} · 点击可替换` : "点击选择 Skill 文件（最大 100 MB）"}</span></label>{progress > 0 ? <div className={`${styles.progress} ${styles.wide}`}><span style={{ width: `${progress}%` }}/></div> : null}{message ? <div className={`${styles.formMessage} ${styles.wide}`}>{message}</div> : null}<div className={`${styles.formActions} ${styles.wide}`}><button type="button" onClick={close}>取消</button><button className={styles.primary} disabled={busy}>{busy ? "正在保存…" : skill ? "保存修改" : "上传并保存"}</button></div></form></section></div>;
+  const [previewFile, setPreviewFile] = useState<File | null>(null), [previewUrl, setPreviewUrl] = useState(skill?.preview_url || ""), [removePreview, setRemovePreview] = useState(false);
+  const choosePreview = (selected: File | null) => { if (!selected) return; if (!selected.type.startsWith("image/")) { setMessage("效果图必须是图片文件。"); return; } if (selected.size > 20 * 1024 * 1024) { setMessage("效果图最大为 20 MB。"); return; } setPreviewFile(selected); setRemovePreview(false); setPreviewUrl(URL.createObjectURL(selected)); setMessage(""); };
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    try {
+      setBusy(true); setMessage("");
+      if (!skill && !file) throw new Error("请选择要保存的 Skill 文件。");
+      if (file && file.size > 100 * 1024 * 1024) throw new Error("单个 Skill 文件最大为 100 MB。");
+      let uploaded: UploadedSkill | undefined;
+      if (file) {
+        setMessage(`正在上传 ${file.name}…`); setProgress(1);
+        const blob = await uploadFile(file, { kind: "skill", onProgress: (value) => setProgress(Math.max(1, Math.round(value))) });
+        uploaded = { url: blob.url, pathname: blob.pathname, download_url: blob.downloadUrl, storage_provider: "r2", object_key: blob.objectKey, original_name: file.name, size: file.size, content_type: file.type || blob.contentType };
+      }
+      let preview: UploadedPreview | null | undefined = removePreview ? null : undefined;
+      if (previewFile) {
+        setMessage(`正在上传效果图 ${previewFile.name}…`);
+        const image = await uploadFile(previewFile, { kind: "skill" });
+        preview = { url: image.url, pathname: image.pathname, name: previewFile.name, size: previewFile.size, storage_provider: "r2", object_key: image.objectKey };
+      }
+      setMessage("正在永久保存 Skill…");
+      const values = new FormData(form);
+      const body: Record<string, unknown> = { name: values.get("name"), category_name: values.get("category_name"), description: values.get("description") };
+      if (uploaded) Object.assign(body, uploaded);
+      if (preview !== undefined) body.preview = preview;
+      const response = await fetch(skill ? `/api/skills/${skill.id}` : "/api/skills", { method: skill ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Skill 保存失败");
+      setProgress(100); await saved();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Skill 保存失败"); } finally { setBusy(false); }
+  };
+  return <div className={styles.backdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) close(); }}><section className={styles.editor} role="dialog" aria-modal="true"><div className={styles.editorHead}><div><p>{skill ? "EDIT SKILL" : "NEW SKILL"}</p><h2>{skill ? "编辑 Skill" : "添加 Skill"}</h2></div><button type="button" onClick={close} aria-label="关闭">×</button></div><form onSubmit={submit}><label><span>Skill 名称（保存后可复制 @名称）</span><input name="name" defaultValue={skill?.name} required maxLength={80}/></label><label><span>分类（可直接新建）</span><input name="category_name" defaultValue={skill?.category_name} list="skill-categories" required maxLength={40}/><datalist id="skill-categories">{categories.map((category) => <option key={category.id} value={category.name}/>)}</datalist></label><label className={styles.wide}><span>说明</span><textarea name="description" defaultValue={skill?.description} rows={4} maxLength={400} placeholder="说明这个 Skill 解决什么问题、如何使用。"/></label>
+    <div className={`${styles.imageEditor} ${styles.wide}`}><div>{previewUrl && !removePreview ? <img src={previewUrl} alt="Skill 效果图预览"/> : <span>可插入一张效果图<br/>视觉类 Skill 会直接以此图作为卡片预览</span>}</div><div className={styles.imageButtons}><label><input type="file" accept="image/*" onChange={(event) => choosePreview(event.target.files?.[0] || null)}/><span>{previewUrl && !removePreview ? "替换效果图" : "插入效果图"}</span></label>{previewUrl && !removePreview ? <button type="button" onClick={() => { setRemovePreview(true); setPreviewFile(null); setPreviewUrl(""); }}>删除效果图</button> : null}</div></div>
+    <label className={`${styles.filePicker} ${styles.wide}`}><input type="file" onChange={(event) => { const selected = event.target.files?.[0] || null; setFile(selected); setProgress(0); setMessage(""); }}/><span>{file ? `已选择：${file.name} · ${fileSize(file.size)}` : skill ? `当前文件：${skill.original_name} · 点击可替换` : "点击选择 Skill 文件（最大 100 MB）"}</span></label>{progress > 0 ? <div className={`${styles.progress} ${styles.wide}`}><span style={{ width: `${progress}%` }}/></div> : null}{message ? <div className={`${styles.formMessage} ${styles.wide}`}>{message}</div> : null}<div className={`${styles.formActions} ${styles.wide}`}><button type="button" onClick={close}>取消</button><button className={styles.primary} disabled={busy}>{busy ? "正在保存…" : skill ? "保存修改" : "上传并保存"}</button></div></form></section></div>;
 }

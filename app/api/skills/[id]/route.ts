@@ -15,6 +15,7 @@ import {
 import { requireAdmin } from "@/lib/utils";
 
 type Context = { params: Promise<{ id: string }> };
+const SKILL_PREVIEW_MAX_BYTES = 20 * 1024 * 1024;
 
 export async function PUT(request: NextRequest, context: Context) {
   const denied = requireAdmin(request);
@@ -42,6 +43,18 @@ export async function PUT(request: NextRequest, context: Context) {
       maximumSize: Number(process.env.SKILL_FILE_MAX_BYTES) || DEFAULT_SKILL_MAX_BYTES,
       storageProvider: String(body.storage_provider || body.storageProvider || body.provider || "")
     }) : null;
+    const preview = body.preview && typeof body.preview === "object" ? await verifyUploadedObject({
+      url: String(body.preview.url || ""),
+      pathname: String(body.preview.pathname || ""),
+      expectedSize: Number(body.preview.size) || 0,
+      prefix: SKILL_FILE_PREFIX,
+      maximumSize: SKILL_PREVIEW_MAX_BYTES,
+      storageProvider: String(body.preview.storage_provider || body.preview.storageProvider || body.preview.provider || "")
+    }) : null;
+    if (preview && !String(preview.contentType || "").startsWith("image/")) {
+      return NextResponse.json({ error: "Skill 效果图必须是图片文件。" }, { status: 400 });
+    }
+    const removePreview = body.preview === null;
     manifest.skills[index] = {
       ...current,
       name: String(body.name || current.name).trim() || current.name,
@@ -61,12 +74,30 @@ export async function PUT(request: NextRequest, context: Context) {
         storage_provider: replacement.provider,
         object_key: replacement.pathname
       } : {}),
+      ...(preview ? {
+        preview_url: preview.url,
+        preview_pathname: preview.pathname,
+        preview_name: String(body.preview?.name || preview.pathname.split("/").pop() || "skill-preview"),
+        preview_content_type: preview.contentType || "image/*",
+        preview_storage_provider: preview.provider,
+        preview_object_key: preview.pathname
+      } : removePreview ? {
+        preview_url: "",
+        preview_pathname: "",
+        preview_name: "",
+        preview_content_type: "",
+        preview_storage_provider: undefined,
+        preview_object_key: ""
+      } : {}),
       version: Number(current.version || 1) + 1,
       updated_at: new Date().toISOString()
     };
     await saveSkillManifest(manifest);
     if (replacement && replacement.pathname !== current.pathname) {
       await removeStoredFile({ url: current.url, pathname: current.pathname, storageProvider: current.storage_provider }).catch(() => undefined);
+    }
+    if ((preview || removePreview) && current.preview_pathname && current.preview_pathname !== preview?.pathname) {
+      await removeStoredFile({ url: current.preview_url, pathname: current.preview_pathname, storageProvider: current.preview_storage_provider }).catch(() => undefined);
     }
     return NextResponse.json({ updated: true, skill: manifest.skills[index] });
   } catch (error) {
@@ -83,6 +114,7 @@ export async function DELETE(request: NextRequest, context: Context) {
     const record = manifest.skills.find((item) => item.id === id);
     if (!record) return NextResponse.json({ error: "Skill 不存在或已经被删除。" }, { status: 404 });
     await removeStoredFile({ url: record.url, pathname: record.pathname, storageProvider: record.storage_provider });
+    if (record.preview_pathname) await removeStoredFile({ url: record.preview_url, pathname: record.preview_pathname, storageProvider: record.preview_storage_provider }).catch(() => undefined);
     manifest.skills = manifest.skills.filter((item) => item.id !== id);
     await saveSkillManifest(manifest);
     return NextResponse.json({ deleted: true });

@@ -18,6 +18,8 @@ function publicSkill(item: any) {
   return { ...safe, download_path: `/api/skills/${item.id}/download` };
 }
 
+const SKILL_PREVIEW_MAX_BYTES = 20 * 1024 * 1024;
+
 export async function GET() {
   try {
     const manifest = await getSkillManifest();
@@ -54,6 +56,17 @@ export async function POST(request: NextRequest) {
       maximumSize,
       storageProvider: String(body.storage_provider || body.storageProvider || body.provider || "")
     });
+    const preview = body.preview ? await verifyUploadedObject({
+      url: String(body.preview.url || ""),
+      pathname: String(body.preview.pathname || ""),
+      expectedSize: Number(body.preview.size) || 0,
+      prefix: SKILL_FILE_PREFIX,
+      maximumSize: SKILL_PREVIEW_MAX_BYTES,
+      storageProvider: String(body.preview.storage_provider || body.preview.storageProvider || body.preview.provider || "")
+    }) : null;
+    if (preview && !String(preview.contentType || "").startsWith("image/")) {
+      return NextResponse.json({ error: "Skill 效果图必须是图片文件。" }, { status: 400 });
+    }
     const manifest = await getSkillManifest();
     const categorySlug = slugifyLabel(categoryName, "other");
     let category = manifest.categories.find((item) => item.slug === categorySlug);
@@ -89,7 +102,13 @@ export async function POST(request: NextRequest) {
       updated_at: timestamp,
       last_verified_at: timestamp,
       storage_provider: metadata.provider,
-      object_key: metadata.pathname
+      object_key: metadata.pathname,
+      preview_url: preview?.url || "",
+      preview_pathname: preview?.pathname || "",
+      preview_name: preview ? String(body.preview?.name || preview.pathname.split("/").pop() || "skill-preview") : "",
+      preview_content_type: preview?.contentType || "",
+      preview_storage_provider: preview?.provider,
+      preview_object_key: preview?.pathname || ""
     };
     manifest.skills.unshift(record);
     const saved = await saveSkillManifest(manifest);

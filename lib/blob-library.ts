@@ -45,6 +45,12 @@ export type SkillRecord = {
   last_verified_at: string;
   storage_provider?: "vercel-blob" | "r2";
   object_key?: string;
+  preview_url?: string;
+  preview_pathname?: string;
+  preview_name?: string;
+  preview_content_type?: string;
+  preview_storage_provider?: "vercel-blob" | "r2";
+  preview_object_key?: string;
 };
 
 export type SkillManifest = {
