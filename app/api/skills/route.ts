@@ -26,7 +26,11 @@ export async function GET() {
       updated_at: manifest.updated_at,
       categories: manifest.categories,
       skills: manifest.skills.map(publicSkill)
-    }, { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120" } });
+    }, { headers: {
+      "Cache-Control": "private, no-store, max-age=0",
+      "CDN-Cache-Control": "no-store",
+      "Vercel-CDN-Cache-Control": "no-store"
+    } });
   } catch (error) {
     return NextResponse.json({ error: storageErrorMessage(error, "Skill 库读取失败") }, { status: 503 });
   }
