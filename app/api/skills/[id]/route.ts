@@ -2,7 +2,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSkillManifest, removeStoredFile, saveSkillManifest, slugifyLabel } from "@/lib/blob-library";
+import {
+  DEFAULT_SKILL_MAX_BYTES,
+  getSkillManifest,
+  removeStoredFile,
+  saveSkillManifest,
+  slugifyLabel,
+  SKILL_FILE_PREFIX,
+  storageErrorMessage,
+  verifyUploadedObject
+} from "@/lib/blob-library";
 import { requireAdmin } from "@/lib/utils";
 
 type Context = { params: Promise<{ id: string }> };
@@ -24,6 +33,15 @@ export async function PUT(request: NextRequest, context: Context) {
       manifest.categories.push(category);
     }
     const current = manifest.skills[index];
+    const hasReplacement = Boolean(body.url || body.pathname);
+    const replacement = hasReplacement ? await verifyUploadedObject({
+      url: String(body.url || ""),
+      pathname: String(body.pathname || ""),
+      expectedSize: Number(body.size) || 0,
+      prefix: SKILL_FILE_PREFIX,
+      maximumSize: Number(process.env.SKILL_FILE_MAX_BYTES) || DEFAULT_SKILL_MAX_BYTES,
+      storageProvider: String(body.storage_provider || body.storageProvider || body.provider || "")
+    }) : null;
     manifest.skills[index] = {
       ...current,
       name: String(body.name || current.name).trim() || current.name,
@@ -31,13 +49,28 @@ export async function PUT(request: NextRequest, context: Context) {
       category_name: category.name,
       category_slug: category.slug,
       description: body.description === undefined ? current.description : String(body.description || "").trim(),
+      ...(replacement ? {
+        original_name: String(body.original_name || replacement.pathname.split("/").pop() || "skill-file"),
+        pathname: replacement.pathname,
+        url: replacement.url,
+        download_url: replacement.downloadUrl,
+        size: replacement.size,
+        content_type: replacement.contentType || String(body.content_type || "application/octet-stream"),
+        storage_state: "verified" as const,
+        last_verified_at: new Date().toISOString(),
+        storage_provider: replacement.provider,
+        object_key: replacement.pathname
+      } : {}),
       version: Number(current.version || 1) + 1,
       updated_at: new Date().toISOString()
     };
     await saveSkillManifest(manifest);
+    if (replacement && replacement.pathname !== current.pathname) {
+      await removeStoredFile({ url: current.url, pathname: current.pathname, storageProvider: current.storage_provider }).catch(() => undefined);
+    }
     return NextResponse.json({ updated: true, skill: manifest.skills[index] });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Skill 更新失败" }, { status: 500 });
+    return NextResponse.json({ error: storageErrorMessage(error, "Skill 更新失败") }, { status: 500 });
   }
 }
 
