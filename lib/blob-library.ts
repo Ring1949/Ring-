@@ -27,6 +27,7 @@ export type SkillCategory = {
 export type SkillRecord = {
   id: string;
   name: string;
+  invocation?: string;
   slug: string;
   category_id: string;
   category_name: string;

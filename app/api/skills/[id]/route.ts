@@ -58,6 +58,7 @@ export async function PUT(request: NextRequest, context: Context) {
     manifest.skills[index] = {
       ...current,
       name: String(body.name || current.name).trim() || current.name,
+      invocation: body.invocation === undefined ? (current.invocation || `@${current.name}`) : (String(body.invocation || "").trim().slice(0, 240) || `@${String(body.name || current.name).trim() || current.name}`),
       category_id: category.id,
       category_name: category.name,
       category_slug: category.slug,

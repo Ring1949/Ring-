@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
     const record = {
       id,
       name,
+      invocation: String(body.invocation || `@${name}`).trim().slice(0, 240) || `@${name}`,
       slug: `${slugifyLabel(name, "skill")}-${id.slice(0, 8)}`,
       category_id: category.id,
       category_name: category.name,
