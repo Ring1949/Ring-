@@ -669,13 +669,20 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
     const existing = await supabase.from("projects").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;
     if (!existing.data) return json({ error: "Resource not found" }, 404);
-    await removeStorageUrl(existing.data.cover_image);
     const media = await supabase.from("media").select("*").eq("project_id", Number(path[1]));
     if (media.error) throw media.error;
-    await Promise.all((media.data || []).map((item: any) => removeMediaObject(item)));
-    const { error } = await supabase.from("projects").delete().eq("id", Number(path[1]));
+    const { data: deleted, error } = await supabase.from("projects").delete().eq("id", Number(path[1])).select("id");
     if (error) throw error;
-    return json({ deleted: true });
+    if (!deleted?.length) return json({ error: "Resource not found" }, 404);
+
+    // Deleting a series must not be blocked by a suspended or temporarily unavailable
+    // object store. The database record is authoritative; file cleanup is best effort.
+    const cleanup = await Promise.allSettled([
+      removeStorageUrl(existing.data.cover_image),
+      ...(media.data || []).map((item: any) => removeMediaObject(item))
+    ]);
+    const cleanupWarnings = cleanup.filter((result) => result.status === "rejected").length;
+    return json({ deleted: true, cleanup_warnings: cleanupWarnings });
   }
   if (path[0] === "media" && path[1]) {
     const existing = await supabase.from("media").select("*").eq("id", Number(path[1])).maybeSingle();

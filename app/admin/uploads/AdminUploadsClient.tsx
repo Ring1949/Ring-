@@ -141,7 +141,7 @@ export function AdminUploadsClient() {
   };
 
   return <>
-    <header className={styles.topbar}><Link className={styles.back} href="/admin">← 内容后台</Link><nav><Link href="/admin/skills">Skill 库</Link><Link href="/works.html?category=all" target="_blank">查看作品库 ↗</Link></nav></header>
+    <header className={styles.topbar}><Link className={styles.back} href="/admin">← 内容后台</Link><nav><Link href="/works.html?category=all" target="_blank">查看作品库 ↗</Link></nav></header>
     <div className={styles.content}>
       <section className={styles.intro}><div><p>DURABLE MEDIA UPLOAD</p><h1>上传作品</h1></div><div className={styles.health}><b>{health?.ok ? "持久存储正常" : health?.error ? "持久存储暂不可写" : "正在检查持久存储"}</b>{health?.storage ? `${health.storage.object_count} 个文件 · ${health.storage.size_mb} MB` : health?.error || "不会写入 Vercel 临时目录"}</div></section>
       <section className={styles.panel}><h2>选择文件与作品信息</h2><form className={styles.form} onSubmit={submit}>

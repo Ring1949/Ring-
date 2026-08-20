@@ -198,6 +198,37 @@ function closeModal() { document.querySelector("#modal").hidden = true; }
 document.querySelector(".modal-close").addEventListener("click",closeModal);
 document.querySelector("#modal").addEventListener("click",(event)=>{if(event.target.id==="modal")closeModal();});
 
+async function removeItem(resource, id, label) {
+  const item = resource === "projects"
+    ? state.projects.find((entry) => String(entry.id) === String(id))
+    : resource === "categories"
+      ? state.categories.find((entry) => String(entry.id) === String(id))
+      : resource === "media"
+        ? state.media.find((entry) => String(entry.id) === String(id))
+        : state.tags.find((entry) => String(entry.id) === String(id));
+  const itemName = item?.title || item?.name || label;
+  if (!confirm(`确定删除${label}「${itemName}」吗？此操作无法撤销。`)) return;
+
+  const button = document.querySelector(`[data-delete-${resource === "projects" ? "project" : resource === "categories" ? "category" : resource === "media" ? "media" : "tag"}="${CSS.escape(String(id))}"]`);
+  if (button) {
+    button.disabled = true;
+    button.textContent = "删除中…";
+  }
+  notify(`正在删除${label}…`);
+
+  try {
+    await request(`/api/${resource}/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await loadAll();
+    notify(`${label}已删除`);
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "删除";
+    }
+    notify(readableRequestError(error, `删除${label}`), true);
+  }
+}
+
 function openCategoryModal(item={}) {
   openModal(`<form id="category-form" class="modal-form" enctype="multipart/form-data"><h2>${item.id?"编辑":"新增"}分类</h2>
     <input type="hidden" name="id" value="${item.id||""}"><div class="field"><label>名称</label><input name="name" value="${escapeHtml(item.name||"")}" required></div>
