@@ -12,7 +12,7 @@ async function request(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(url, { ...options, signal: options.signal || controller.signal });
+    const response = await fetch(url, { cache: "no-store", ...options, signal: options.signal || controller.signal });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `服务器返回 ${response.status}`);
     return payload;

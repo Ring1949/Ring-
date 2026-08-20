@@ -6,13 +6,15 @@ export type PortfolioCoverOverrides = {
   updated_at: string;
   categories: Record<string, string>;
   projects: Record<string, string>;
+  deleted_projects: Record<string, string>;
 };
 
 const emptyOverrides = (): PortfolioCoverOverrides => ({
   version: 1,
   updated_at: new Date(0).toISOString(),
   categories: {},
-  projects: {}
+  projects: {},
+  deleted_projects: {}
 });
 
 export function basePortfolioCategories() {
@@ -34,20 +36,28 @@ export function normalizeCoverOverrides(value: unknown): PortfolioCoverOverrides
     ...emptyOverrides(),
     ...raw,
     categories: raw.categories && typeof raw.categories === "object" ? raw.categories : {},
-    projects: raw.projects && typeof raw.projects === "object" ? raw.projects : {}
+    projects: raw.projects && typeof raw.projects === "object" ? raw.projects : {},
+    deleted_projects: raw.deleted_projects && typeof raw.deleted_projects === "object" ? raw.deleted_projects : {}
   };
 }
 
-export function applyCategoryCoverOverrides(categories: any[], overrides: PortfolioCoverOverrides) {
+export function applyCategoryCoverOverrides(categories: any[], value: unknown) {
+  const overrides = normalizeCoverOverrides(value);
   return categories.map((item) => ({
     ...item,
     cover_image: overrides.categories[String(item.id)] || item.cover_image || ""
   }));
 }
 
-export function applyProjectCoverOverrides(projects: any[], overrides: PortfolioCoverOverrides) {
-  return projects.map((item) => {
+export function applyProjectCoverOverrides(projects: any[], value: unknown) {
+  const overrides = normalizeCoverOverrides(value);
+  return projects.filter((item) => !overrides.deleted_projects[String(item.id)]).map((item) => {
     const cover = overrides.projects[String(item.id)];
     return cover ? { ...item, cover_image: cover, series_cover: cover } : item;
   });
+}
+
+export function isPortfolioProjectDeleted(projectId: unknown, value: unknown) {
+  const overrides = normalizeCoverOverrides(value);
+  return Boolean(overrides.deleted_projects[String(projectId || "")]);
 }

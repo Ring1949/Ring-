@@ -221,7 +221,8 @@ export async function getPortfolioCoverOverrides() {
     version: 1,
     updated_at: new Date(0).toISOString(),
     categories: {},
-    projects: {}
+    projects: {},
+    deleted_projects: {}
   })));
 }
 

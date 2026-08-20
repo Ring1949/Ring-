@@ -9,13 +9,14 @@ import {
   getRecoveredSettings,
   getRecoveredTags
 } from "@/lib/recovered-data";
-import { getBlobMediaRecords, getPortfolioCoverOverrides } from "@/lib/blob-library";
+import { getBlobMediaRecords, getPortfolioCoverOverrides, savePortfolioCoverOverrides } from "@/lib/blob-library";
 import {
   applyCategoryCoverOverrides,
   applyProjectCoverOverrides,
   basePortfolioCategories,
   basePortfolioProjects
 } from "@/lib/portfolio-state";
+import { requireAdmin } from "@/lib/utils";
 
 type ArchiveContext = { params: Promise<{ path: string[] }> };
 
@@ -82,6 +83,36 @@ async function runArchiveRequest(
   const route = path.join("/");
   if (route === "inspiration" || route === "inspiration-config" || route.startsWith("inspiration/")) {
     return NextResponse.json({ error: "该频道已经删除。" }, { status: 404 });
+  }
+  if (method === "DELETE" && path[0] === "projects" && path[1]) {
+    const denied = requireAdmin(request);
+    if (denied) return denied;
+    const target = basePortfolioProjects().find((item: any) => String(item.id) === String(path[1]) || item.slug === path[1]);
+    if (target) {
+      try {
+        const current = await getPortfolioCoverOverrides();
+        const projectId = String(target.id);
+        const projectCovers = { ...current.projects };
+        delete projectCovers[projectId];
+        const saved = await savePortfolioCoverOverrides({
+          ...current,
+          projects: projectCovers,
+          deleted_projects: {
+            ...current.deleted_projects,
+            [projectId]: new Date().toISOString()
+          }
+        });
+        // The persistent deletion manifest is authoritative for imported projects.
+        // Database and object cleanup remains best effort for records that also exist there.
+        await handleArchiveDelete(request, context).catch(() => undefined);
+        return NextResponse.json({ deleted: true, project_id: projectId, version: saved.version }, {
+          headers: { "Cache-Control": "private, no-store, max-age=0" }
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "系列删除失败";
+        return NextResponse.json({ error: `系列删除失败：${message}` }, { status: 500 });
+      }
+    }
   }
   try {
     const handler = method === "GET" ? handleArchiveGet : method === "POST" ? handleArchivePost : method === "PUT" ? handleArchivePut : handleArchiveDelete;

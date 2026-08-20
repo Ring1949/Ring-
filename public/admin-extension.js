@@ -158,12 +158,6 @@ document.querySelector("#tag-form").addEventListener("submit",async(event)=>{
   }catch(error){notify(error.message,true);}
 });
 
-async function removeItem(resource,id,label) {
-  if(!confirm(`确定删除这个${label}吗？此操作无法撤销。`))return;
-  try{await request(`/api/${resource}/${id}`,{method:"DELETE"});await loadAll();notify(`${label}已删除`);}
-  catch(error){notify(error.message,true);}
-}
-
 bootstrap().catch((error)=>{
   console.error("后台初始化失败：",error);
   document.body.innerHTML=`<main class="admin-load-error"><h1>后台加载失败</h1><p>${escapeHtml(error.message)}</p><a href="/">返回首页</a></main>`;

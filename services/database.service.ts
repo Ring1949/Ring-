@@ -1,7 +1,8 @@
 import { getSupabaseServer } from "@/lib/supabase";
 import { getRecoveredMedia } from "@/lib/recovered-data";
 import { importedDatabaseMedia, importedPhotoLibrary, isProductPhotography } from "@/lib/photo-library";
-import { getBlobMediaRecords } from "@/lib/blob-library";
+import { getBlobMediaRecords, getPortfolioCoverOverrides } from "@/lib/blob-library";
+import { isPortfolioProjectDeleted } from "@/lib/portfolio-state";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 const normalizeMedia = (media: any) => {
@@ -106,23 +107,29 @@ async function fetchLiveDatabaseMedia() {
 
 async function databaseMedia() {
   const currentTime = Date.now();
-  if (liveMediaCache && liveMediaCache.expiresAt > currentTime) return liveMediaCache.items;
-  if (!liveMediaRequest) {
-    liveMediaRequest = Promise.all([
-      fetchLiveDatabaseMedia().catch(() => []),
-      getBlobMediaRecords().catch(() => [])
-    ])
-      .then(([supabaseItems, blobItems]) => {
-        const merged = mergeDatabaseMedia([...supabaseItems, ...blobItems.map(normalizeMedia)]);
-        liveMediaCache = { expiresAt: Date.now() + liveMediaCacheTtlMs, items: merged };
-        return merged;
-      })
-      .catch(() => cachedDatabaseMedia)
-      .finally(() => {
-        liveMediaRequest = null;
-      });
+  let items: any[];
+  if (liveMediaCache && liveMediaCache.expiresAt > currentTime) {
+    items = liveMediaCache.items;
+  } else {
+    if (!liveMediaRequest) {
+      liveMediaRequest = Promise.all([
+        fetchLiveDatabaseMedia().catch(() => []),
+        getBlobMediaRecords().catch(() => [])
+      ])
+        .then(([supabaseItems, blobItems]) => {
+          const merged = mergeDatabaseMedia([...supabaseItems, ...blobItems.map(normalizeMedia)]);
+          liveMediaCache = { expiresAt: Date.now() + liveMediaCacheTtlMs, items: merged };
+          return merged;
+        })
+        .catch(() => cachedDatabaseMedia)
+        .finally(() => {
+          liveMediaRequest = null;
+        });
+    }
+    items = await liveMediaRequest;
   }
-  return liveMediaRequest;
+  const overrides = await getPortfolioCoverOverrides().catch(() => null);
+  return overrides ? items.filter((item: any) => !isPortfolioProjectDeleted(item.project_id, overrides)) : items;
 }
 
 function categorySlug(category: string | null) {
