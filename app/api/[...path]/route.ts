@@ -42,6 +42,13 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
     if (search.get("recommended") === "true") projects = projects.filter((item: any) => flag(item.is_recommended));
     return NextResponse.json(projects);
   }
+  if (route === "series") {
+    const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
+    return NextResponse.json(
+      applyProjectCoverOverrides(basePortfolioProjects(), overrides)
+        .filter((item: any) => flag(item.is_series))
+    );
+  }
   if (route.startsWith("projects/")) {
     const id = Number(path[1]);
     const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
@@ -80,10 +87,10 @@ async function runArchiveRequest(
     const handler = method === "GET" ? handleArchiveGet : method === "POST" ? handleArchivePost : method === "PUT" ? handleArchivePut : handleArchiveDelete;
     const response = await handler(request, context);
     if (method === "GET") {
-      if (["projects", "media", "categories", "tags"].includes(route)) {
+      if (["projects", "media", "categories", "tags", "series"].includes(route)) {
         const body = await response.clone().text();
         if (body.trim() === "[]" || body.trim() === "{}" || body.trim() === "") return recoveredGet(request, context);
-        if ((route === "categories" || route === "projects") && response.ok) {
+        if ((route === "categories" || route === "projects" || route === "series") && response.ok) {
           const items = JSON.parse(body);
           if (Array.isArray(items)) {
             const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));

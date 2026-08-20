@@ -2,6 +2,8 @@ import { getSettings } from "@/lib/db";
 import { getSupabaseServer } from "@/lib/supabase";
 import { fallbackHomePayload, isSupabaseConfigError } from "@/lib/fallback-data";
 import { importedPhotoLibrary } from "@/lib/photo-library";
+import { getPortfolioCoverOverrides } from "@/lib/blob-library";
+import { applyCategoryCoverOverrides, applyProjectCoverOverrides } from "@/lib/portfolio-state";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 const normalizeProject = (project: any) => ({
@@ -119,12 +121,27 @@ async function getHomePayloadFromSupabase() {
   };
 }
 
+async function applySavedPortfolioCovers(payload: any) {
+  const overrides = await getPortfolioCoverOverrides().catch(() => ({
+    version: 1,
+    updated_at: "",
+    categories: {},
+    projects: {}
+  }));
+  return {
+    ...payload,
+    categories: applyCategoryCoverOverrides(payload.categories || [], overrides),
+    featured: applyProjectCoverOverrides(payload.featured || [], overrides),
+    recommended: applyProjectCoverOverrides(payload.recommended || [], overrides)
+  };
+}
+
 export async function getHomePayload() {
-  if (importedPhotoLibrary.media?.length) return fallbackHomePayload;
+  if (importedPhotoLibrary.media?.length) return applySavedPortfolioCovers(fallbackHomePayload);
   try {
-    return await getHomePayloadFromSupabase();
+    return applySavedPortfolioCovers(await getHomePayloadFromSupabase());
   } catch (error) {
-    if (isSupabaseConfigError(error)) return fallbackHomePayload;
+    if (isSupabaseConfigError(error)) return applySavedPortfolioCovers(fallbackHomePayload);
     throw error;
   }
 }

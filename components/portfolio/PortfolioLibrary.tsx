@@ -20,7 +20,7 @@ export default function PortfolioLibrary() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/home").then((response) => response.ok ? response.json() : null).then((payload) => {
+    fetch("/api/home", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((payload) => {
       if (active && Array.isArray(payload?.categories)) setCategories(payload.categories);
     }).catch(() => undefined);
     return () => { active = false; };

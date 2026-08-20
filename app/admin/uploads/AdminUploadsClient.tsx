@@ -124,7 +124,7 @@ export function AdminUploadsClient() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "封面关系保存失败。");
-      setCoverProgress(100); setCoverStatus("封面已保存，刷新网站后会使用新封面。"); setCoverError(false); setCoverFile(null);
+      setCoverProgress(100); setCoverStatus("封面已保存，作品库已立即使用新封面。"); setCoverError(false); setCoverFile(null);
       (form.elements.namedItem("cover_file") as HTMLInputElement).value = "";
       await load();
     } catch (reason) {
