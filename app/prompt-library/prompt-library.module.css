@@ -12,11 +12,14 @@
 @media(max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.library{width:min(100% - 32px,1240px);padding-top:34px}.titleRow{margin-bottom:22px}.add{width:42px;height:42px}.search{height:52px}.grid{grid-template-columns:1fr;margin-top:32px;gap:16px}.card{height:204px}.cardBody{padding:24px}.editor{padding:22px}.editor form{grid-template-columns:1fr}.wide{grid-column:1}.imageEditor{grid-template-columns:1fr}.detail{padding:28px 22px}.detailNav{inset:50% 8px auto}.detailNav button{width:40px;height:40px}.detail footer{align-items:flex-start;flex-direction:column}}
 .cardWithImage .cardFooter{margin-top:10px}
 
-/* Preserve the complete uploaded artwork instead of cropping it to the card frame. */
-.cardMedia{background:#f1f1ef}
-.cardMedia img,.imageEditor img{object-fit:contain}
-.cardWithImage:hover .cardMedia img{transform:scale(1)}
-.detail>img{width:100%;height:auto;max-height:none;object-fit:contain;background:#f1f1ef}
+/* Cards stay visually full; only the detail view preserves the complete artwork. */
+.cardMedia{background:#222}
+.cardMedia img{object-fit:cover}
+.imageEditor img{object-fit:contain}
+.cardWithImage:hover .cardMedia img{transform:scale(1.02)}
+.detail{width:min(680px,100%);padding:64px 34px 34px;border-radius:26px;background:#fcfcfa}
+.detailClose{z-index:4;top:18px;right:20px}
+.detail>img{width:auto;max-width:min(82%,500px);height:auto;max-height:260px;margin:0 auto 26px;object-fit:contain;background:#f3f3f1;border:1px solid rgba(20,20,20,.055);border-radius:13px;box-shadow:0 10px 30px rgba(0,0,0,.055)}
 
 /* Smoothly connect a card click with the centered detail view. */
 .backdrop{animation:promptBackdropIn 220ms ease-out both}
@@ -24,7 +27,8 @@
 .detail>img{animation:promptImageIn 520ms 70ms cubic-bezier(.22,1,.36,1) both}
 .detailNav{animation:promptControlsIn 360ms 120ms ease-out both}
 @keyframes promptBackdropIn{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(13px)}}
-@keyframes promptDetailIn{from{opacity:0;transform:translateY(24px) scale(.965);box-shadow:0 10px 36px rgba(0,0,0,.08)}to{opacity:1;transform:translateY(0) scale(1);box-shadow:0 28px 90px rgba(0,0,0,.2)}}
+@keyframes promptDetailIn{from{opacity:0;transform:translateY(16px) scale(.98);box-shadow:0 10px 36px rgba(0,0,0,.08)}to{opacity:1;transform:translateY(0) scale(1);box-shadow:0 28px 90px rgba(0,0,0,.18)}}
 @keyframes promptImageIn{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes promptControlsIn{from{opacity:0;transform:translateY(calc(-50% + 8px))}to{opacity:1;transform:translateY(-50%)}}
 @media(prefers-reduced-motion:reduce){.backdrop,.detail,.detail>img,.detailNav{animation:none!important}.cardMedia img{transition:none}}
+@media(max-width:650px){.detail{padding:60px 20px 24px}.detail>img{max-width:92%;max-height:220px;margin-bottom:22px}}
