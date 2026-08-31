@@ -7,7 +7,7 @@ const categories = {
   other: ["其他", "Other works"]
 };
 
-const filters = {
+let filters = {
   all: [["全部", "all"], ["摄影", "photo"], ["平面", "graphic"], ["空间", "space"], ["AI", "ai"], ["其他", "other"]],
   photo: [["全部摄影", "all"], ["产品摄影", "product"], ["人物", "portrait"], ["校园活动", "campus"], ["纪实", "documentary"], ["展览与文化", "culture"], ["风光与建筑", "landscape"], ["创作", "creative"], ["戒指", "ring"], ["项链", "necklace"], ["手串手镯", "bracelet"], ["耳饰", "earring"], ["矿标", "mineral"], ["摆件", "ornament"], ["其他珠宝", "jewelry"]],
   graphic: [["全部平面", "all"], ["设计", "design"], ["手绘", "drawing"], ["海报", "poster"]],
@@ -24,9 +24,7 @@ const [title, description] = categories[category];
 const pageSize = 24;
 const items = new Map();
 const details = new Map();
-let activeFilter = requested === "product"
-  ? "product"
-  : (filters[category] || []).some(([, value]) => value === requestedFilter) ? requestedFilter : "all";
+let activeFilter = "all";
 let query = "";
 let nextCursor = null;
 let loading = false;
@@ -125,6 +123,33 @@ function renderPrimaryFilters() {
     history.replaceState(null, "", `${nextUrl.pathname}${nextUrl.search}`);
     loadPage({ reset: true });
   };
+}
+
+async function loadFilterConfig() {
+  if (category === "all") return;
+  try {
+    const response = await fetch("/api/work-filters", { cache: "no-store" });
+    if (!response.ok) return;
+    const config = await response.json();
+    ["photo", "graphic", "space", "ai", "other"].forEach((group) => {
+      if (!Array.isArray(config[group])) return;
+      const rows = config[group]
+        .map((item) => [String(item?.label || "").trim(), String(item?.value || "").trim()])
+        .filter(([label, value]) => label && value);
+      if (rows.length) filters[group] = rows;
+    });
+  } catch {
+    // The built-in taxonomy remains available if the remote setting is unavailable.
+  }
+}
+
+async function initializeGallery() {
+  await loadFilterConfig();
+  activeFilter = requested === "product"
+    ? "product"
+    : (filters[category] || []).some(([, value]) => value === requestedFilter) ? requestedFilter : "all";
+  renderPrimaryFilters();
+  loadPage({ reset: true });
 }
 
 async function loadPage({ reset = false } = {}) {
@@ -238,5 +263,4 @@ const observer = new IntersectionObserver((entries) => {
 }, { rootMargin: "900px 0px" });
 observer.observe(sentinel);
 
-renderPrimaryFilters();
-loadPage({ reset: true });
+initializeGallery();

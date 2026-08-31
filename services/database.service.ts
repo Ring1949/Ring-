@@ -165,7 +165,7 @@ function filterGalleryItems(items: any[], filter: string | null, query: string |
     } else if (["photo", "graphic", "space", "ai", "other"].includes(filter)) {
       result = result.filter((item) => item.category_slug === filter);
     } else {
-      const terms = galleryFilterTerms[filter] || [];
+      const terms = galleryFilterTerms[filter] || [filter];
       if (terms.length) result = result.filter((item) => terms.some((term) => includesFilterTerm(mediaSearchText(item), term)));
     }
   }

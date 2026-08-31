@@ -5,7 +5,7 @@
   <title>内容管理 — 山川行止</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260811-skill-library-1">
+  <link rel="stylesheet" href="admin.css?v=20260831-work-filters-1">
   <link rel="stylesheet" href="/glass-surface.css?v=20260702-1">
 </head>
 <body>
@@ -17,6 +17,7 @@
         <a class="admin-nav-link" href="/admin/uploads">上传作品</a>
         <button data-view="projects">系列管理</button>
         <button data-view="categories">作品管理</button>
+        <button data-view="filters">筛选分类</button>
         <a class="admin-nav-link" href="/admin/graph">关系图谱</a>
         <button data-view="contact">联系方式</button>
       </nav>
@@ -62,6 +63,23 @@
           <form id="tag-form" class="inline-form"><input name="name" placeholder="标签名称" required><input name="slug" placeholder="英文 slug"><button class="primary">新增标签</button></form>
           <div id="tag-list" class="tag-admin-list"></div>
         </div>
+      </section>
+
+      <section class="admin-view" data-panel="filters">
+        <div class="taxonomy-header">
+          <p>WORKS NAVIGATION</p><h2>作品库筛选分类</h2>
+          <span>这里控制作品库顶部的筛选标签。删除标签不会删除作品，作品仍保留在“全部”中。</span>
+        </div>
+        <div class="filter-editor form-card compact">
+          <div class="field"><label>正在编辑</label><select id="work-filter-group"><option value="photo">摄影</option><option value="graphic">平面</option><option value="space">空间</option><option value="ai">AI</option><option value="other">其他</option></select></div>
+          <form id="work-filter-form" class="inline-form wide">
+            <input name="label" placeholder="新分类名称，例如：静物" maxlength="30" required>
+            <input name="value" placeholder="匹配关键词（可留空）" maxlength="60">
+            <button class="primary" type="submit">＋ 新增分类</button>
+          </form>
+          <p class="filter-editor-help wide">“匹配关键词”用于查找作品标题、介绍和标签；留空时会自动使用分类名称。</p>
+        </div>
+        <div id="work-filter-list" class="filter-admin-list"></div>
       </section>
 
       <section class="admin-view" data-panel="projects">

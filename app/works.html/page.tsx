@@ -13,7 +13,7 @@ export default function WorksPage() {
       <link rel="stylesheet" href="/site-nav.css?v=20260812-unified-1" />
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       <Script src="/common.js?v=20260812-unified-nav-1" strategy="afterInteractive" />
-      <Script src="/works.js?v=20260811-skill-library-1" strategy="afterInteractive" />
+      <Script src="/works.js?v=20260831-work-filters-1" strategy="afterInteractive" />
     </>
   );
 }
