@@ -13,7 +13,7 @@ export type StoredUpload = {
   thumbnailUrl?: string;
 };
 
-type UploadKind = "media" | "cover" | "graph" | "skill" | "prompt" | "poetry" | "legacy-media";
+type UploadKind = "media" | "cover" | "graph" | "skill" | "prompt" | "knowledge" | "poetry" | "legacy-media";
 
 function imageDimensions(file: File): Promise<{ width: number; height: number }> {
   if (!file.type.startsWith("image/")) return Promise.resolve({ width: 0, height: 0 });

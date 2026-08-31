@@ -11,7 +11,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 const R2_REGION = "auto";
 const PRESIGNED_UPLOAD_TTL_SECONDS = 15 * 60;
 
-export type R2UploadKind = "media" | "cover" | "graph" | "skill" | "prompt" | "poetry" | "thumbnail" | "legacy-media";
+export type R2UploadKind = "media" | "cover" | "graph" | "skill" | "prompt" | "knowledge" | "poetry" | "thumbnail" | "legacy-media";
 
 type R2Config = {
   accountId: string;
@@ -71,6 +71,7 @@ function prefixFor(kind: R2UploadKind) {
   if (kind === "cover") return "portfolio/admin/covers";
   if (kind === "graph") return "portfolio/admin/graph-nodes";
   if (kind === "prompt") return "prompt-library/images";
+  if (kind === "knowledge") return "knowledge-library/images";
   if (kind === "poetry") return "poetry-library/images";
   if (kind === "legacy-media") return `media/${day}`;
   return "portfolio/admin";
@@ -78,7 +79,7 @@ function prefixFor(kind: R2UploadKind) {
 
 export function maximumUploadBytes(kind: R2UploadKind) {
   if (kind === "skill") return Number(process.env.SKILL_FILE_MAX_BYTES) || 100 * 1024 * 1024;
-  if (kind === "cover" || kind === "graph" || kind === "prompt" || kind === "poetry") return 20 * 1024 * 1024;
+  if (kind === "cover" || kind === "graph" || kind === "prompt" || kind === "knowledge" || kind === "poetry") return 20 * 1024 * 1024;
   if (kind === "thumbnail") return 2 * 1024 * 1024;
   return Number(process.env.MEDIA_FILE_MAX_BYTES) || 250 * 1024 * 1024;
 }

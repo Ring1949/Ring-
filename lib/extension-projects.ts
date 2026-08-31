@@ -34,6 +34,12 @@ export const extensionProjects: ExtensionProject[] = [
     description: "保存、检索并快速复制可复用提示词。",
     introduction: "将常用提示词按创作方向分类整理，随时搜索、查看并复制到新的对话中。",
     cover: "/assets/extensions/prompt-library.png", href: "/prompt-library", status: "ACTIVE"
+  },
+  {
+    id: "knowledge-library", index: "05", category: "KNOWLEDGE LIBRARY", title: "知识库",
+    description: "收藏、标记并检索长期积累的知识卡片。",
+    introduction: "将电影、美术、摄影、建模、乐理、服装、人物、材质与空间等知识整理成可搜索的个人卡片档案。",
+    cover: "/assets/extensions/knowledge-library.svg", href: "/knowledge-library", status: "ACTIVE"
   }
 ];
 

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createR2PresignedUpload, r2Configured, type R2UploadKind } from "@/lib/r2";
 import { requireAdmin } from "@/lib/utils";
 
-const kinds = new Set<R2UploadKind>(["media", "cover", "graph", "skill", "prompt", "poetry", "thumbnail", "legacy-media"]);
+const kinds = new Set<R2UploadKind>(["media", "cover", "graph", "skill", "prompt", "knowledge", "poetry", "thumbnail", "legacy-media"]);
 
 export async function POST(request: NextRequest) {
   const denied = requireAdmin(request);
