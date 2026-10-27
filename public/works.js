@@ -77,7 +77,7 @@ function card(item, index) {
     ? `<video src="${esc(source)}" muted loop playsinline preload="metadata"></video>`
     : isFile(item)
       ? `<span class="file-tile"><b>↧</b><small>${esc(item.file_type || "FILE")}</small></span>`
-      : `<img src="${esc(source)}" alt="${esc(item.title || title)}" loading="${priority}" decoding="async"${fetchPriority}${width}${height}>`;
+      : `<img src="${esc(optimizedImagePath(source, 1080, 76))}" srcset="${esc(responsiveImageSources(source, [640, 1080, 1920], 76))}" sizes="(max-width:600px) calc(50vw - 22px), (max-width:1100px) calc(33vw - 28px), 25vw" alt="${esc(item.title || title)}" loading="${priority}" decoding="async"${fetchPriority}${width}${height}>`;
   return `<button class="item" data-id="${esc(String(item.id))}" type="button"><span class="item-media" style="--media-ratio:${ratio}">${media}</span><span class="label"><strong>${esc(item.title || "未命名作品")}</strong><small>${esc(item.project_title || title)}</small></span></button>`;
 }
 

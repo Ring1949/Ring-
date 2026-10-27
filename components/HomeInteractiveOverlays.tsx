@@ -3,11 +3,11 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import PortfolioLibrary from "@/components/portfolio/PortfolioLibrary";
-import HomeExtensions from "@/components/extensions/HomeExtensions";
 
-// These experiences are only visible after user interaction. Keep their large
-// 3D and animation dependencies out of the homepage's initial JavaScript chunk.
+// Keep below-the-fold and interaction-only experiences out of the initial
+// homepage chunk. They are requested shortly before the user reaches them.
+const PortfolioLibrary = dynamic(() => import("@/components/portfolio/PortfolioLibrary"), { ssr: false });
+const HomeExtensions = dynamic(() => import("@/components/extensions/HomeExtensions"), { ssr: false });
 const ContactLanyardOverlay = dynamic(() => import("@/components/contact/ContactLanyardOverlay"), { ssr: false });
 
 export default function HomeInteractiveOverlays() {
@@ -25,38 +25,55 @@ export default function HomeInteractiveOverlays() {
   }, []);
 
   useEffect(() => {
-    const legacyLibrary = document.querySelector<HTMLElement>("#works-library");
-    if (legacyLibrary) {
-      const legacyChildren = [...legacyLibrary.children] as HTMLElement[];
-      legacyChildren.forEach((child) => { child.hidden = true; });
-      legacyLibrary.classList.add("portfolio-library-mounted");
-      const host = document.createElement("div");
-      host.id = "portfolio-library-react";
-      legacyLibrary.appendChild(host);
-      setLibraryHost(host);
-      return () => {
-        host.remove();
-        legacyLibrary.classList.remove("portfolio-library-mounted");
-        legacyChildren.forEach((child) => { child.hidden = false; });
-      };
-    }
-  }, []);
+    const mounts = [
+      { selector: "#works-library", hostId: "portfolio-library-react", className: "portfolio-library-mounted", setHost: setLibraryHost },
+      { selector: "#extensions", hostId: "home-extensions-react", className: "home-extensions-mounted", setHost: setExtensionsHost }
+    ];
+    const cleanups: Array<() => void> = [];
+    const mountBySelector = new Map<string, () => void>();
 
-  useEffect(() => {
-    const legacyExtensions = document.querySelector<HTMLElement>("#extensions");
-    if (!legacyExtensions) return;
-    const legacyChildren = [...legacyExtensions.children] as HTMLElement[];
-    legacyChildren.forEach((child) => { child.hidden = true; });
-    legacyExtensions.classList.add("home-extensions-mounted");
-    const host = document.createElement("div");
-    host.id = "home-extensions-react";
-    legacyExtensions.appendChild(host);
-    setExtensionsHost(host);
-    return () => {
-      host.remove();
-      legacyExtensions.classList.remove("home-extensions-mounted");
-      legacyChildren.forEach((child) => { child.hidden = false; });
+    mounts.forEach(({ selector, hostId, className, setHost }) => {
+      const section = document.querySelector<HTMLElement>(selector);
+      if (!section) return;
+      let mounted = false;
+      const mount = () => {
+        if (mounted) return;
+        mounted = true;
+        const legacyChildren = [...section.children] as HTMLElement[];
+        legacyChildren.forEach((child) => { child.hidden = true; });
+        section.classList.add(className);
+        const host = document.createElement("div");
+        host.id = hostId;
+        section.appendChild(host);
+        setHost(host);
+        cleanups.push(() => {
+          host.remove();
+          section.classList.remove(className);
+          legacyChildren.forEach((child) => { child.hidden = false; });
+        });
+      };
+      mountBySelector.set(selector, mount);
+      const observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          mount();
+        }
+      }, { rootMargin: "800px 0px" });
+      observer.observe(section);
+      cleanups.push(() => observer.disconnect());
+    });
+
+    const mountBeforeAnchorNavigation = (event: MouseEvent) => {
+      const link = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href^="#"]');
+      const selector = link?.getAttribute("href") || "";
+      mountBySelector.get(selector)?.();
     };
+    document.addEventListener("click", mountBeforeAnchorNavigation, true);
+    cleanups.push(() => document.removeEventListener("click", mountBeforeAnchorNavigation, true));
+
+    mountBySelector.get(window.location.hash)?.();
+
+    return () => cleanups.reverse().forEach((cleanup) => cleanup());
   }, []);
 
   useEffect(() => {

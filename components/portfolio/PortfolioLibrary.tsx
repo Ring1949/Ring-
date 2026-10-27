@@ -5,6 +5,11 @@ import SpotlightCard from "./SpotlightCard";
 import styles from "./portfolio-library.module.css";
 
 type Category = { slug: string; name?: string; description?: string; cover_image?: string };
+type HomePayload = { categories?: Category[] };
+type HomeWindow = Window & {
+  __ringHomePayload?: HomePayload;
+  __ringHomePromise?: Promise<HomePayload>;
+};
 
 const categoryOrder = ["photo", "space", "graphic", "ai", "other"];
 const defaults: Record<string, { name: string; english: string; description: string; cover: string }> = {
@@ -15,12 +20,21 @@ const defaults: Record<string, { name: string; english: string; description: str
   other: { name: "其他", english: "OTHER", description: "日常实验、手绘、旅途、手工与不完美的记录。", cover: "/recovered/118-111.png" }
 };
 
+const optimizedCover = (source: string, width: number) => {
+  if (!source.startsWith("/") || source.startsWith("/_next/image") || /\.(svg|gif)$/i.test(source)) return source;
+  return `/_next/image?url=${encodeURIComponent(source)}&w=${width}&q=78`;
+};
+
 export default function PortfolioLibrary() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     let active = true;
-    fetch("/api/home", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((payload) => {
+    const sharedWindow = window as HomeWindow;
+    const request = sharedWindow.__ringHomePayload
+      ? Promise.resolve(sharedWindow.__ringHomePayload)
+      : sharedWindow.__ringHomePromise || fetch("/api/home", { cache: "no-store" }).then((response) => response.ok ? response.json() : null);
+    request.then((payload) => {
       if (active && Array.isArray(payload?.categories)) setCategories(payload.categories);
     }).catch(() => undefined);
     return () => { active = false; };
@@ -49,7 +63,14 @@ export default function PortfolioLibrary() {
         {cards.map((card, index) => (
           <a className={`${styles.link} ${index === 0 ? styles.featured : ""}`} href={`/works.html?category=${card.slug}`} key={card.slug}>
             <SpotlightCard className={styles.card} spotlightColor="rgba(0, 229, 255, 0.2)">
-              <img src={card.cover} alt={`${card.name}分类封面`} loading={index === 0 ? "eager" : "lazy"} />
+              <img
+                src={optimizedCover(card.cover, index === 0 ? 1920 : 828)}
+                srcSet={`${optimizedCover(card.cover, 640)} 640w, ${optimizedCover(card.cover, 1080)} 1080w, ${optimizedCover(card.cover, 1920)} 1920w`}
+                sizes={index === 0 ? "(max-width: 680px) calc(100vw - 40px), (max-width: 1100px) calc(100vw - 64px), 70vw" : "(max-width: 680px) calc(100vw - 40px), (max-width: 1100px) calc(50vw - 41px), 18vw"}
+                alt={`${card.name}分类封面`}
+                loading={index === 0 ? "eager" : "lazy"}
+                decoding="async"
+              />
               <div className={styles.shade} />
               <div className={styles.copy}>
                 <div><small>{String(index + 1).padStart(2, "0")}</small><i /></div>

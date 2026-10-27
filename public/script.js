@@ -4,21 +4,11 @@ let recommendIndex = 0;
 let recommendVirtualItems = [];
 
 async function initHome() {
-  const home = await api("/api/home");
-  const { settings, categories, hero } = home;
-  document.querySelectorAll("[data-category-cover]").forEach((container) => {
-    const category = categories.find((item) => item.slug === container.dataset.categoryCover);
-    const image = container.querySelector("img");
-    const cover = category?.cover_image || "/assets/archive-collage.png";
-    image.onerror = () => {
-      image.onerror = null;
-      image.srcset = responsiveImageSources("/assets/archive-collage.png");
-      image.src = optimizedImagePath("/assets/archive-collage.png", 1080, 88);
-    };
-    image.sizes = "(max-width: 600px) calc(100vw - 40px), (max-width: 900px) calc(50vw - 30px), 33vw";
-    image.srcset = responsiveImageSources(cover);
-    image.src = optimizedImagePath(cover, 1080, 88);
-  });
+  const homeRequest = api("/api/home");
+  window.__ringHomePromise = homeRequest;
+  const home = await homeRequest;
+  window.__ringHomePayload = home;
+  const { settings, hero } = home;
   document.title = `${settings.site_name || "山川行止"} — 个人视觉档案`;
   document.querySelector("#hero-title").textContent = settings.hero_title || settings.site_name;
   document.querySelector("#hero-subtitle").textContent = settings.hero_subtitle || "";

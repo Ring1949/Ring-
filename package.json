@@ -19,10 +19,9 @@
         "@react-three/rapier": "^2.2.0",
         "@supabase/supabase-js": "^2.110.0",
         "@vercel/blob": "^2.4.0",
-        "framer-motion": "^12.42.2",
         "gsap": "^3.13.0",
         "meshline": "^3.3.1",
-        "next": "^15.5.20",
+        "next": "^15.5.28",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
         "three": "^0.185.1"
