@@ -137,7 +137,17 @@ async function applySavedPortfolioCovers(payload: any) {
 }
 
 export async function getHomePayload() {
-  if (importedPhotoLibrary.media?.length) return applySavedPortfolioCovers(fallbackHomePayload);
+  if (importedPhotoLibrary.media?.length) {
+    const settings = await getSettings().catch(() => fallbackHomePayload.settings);
+    return applySavedPortfolioCovers({
+      ...fallbackHomePayload,
+      settings: { ...fallbackHomePayload.settings, ...settings },
+      hero: {
+        file_path: settings.hero_media || settings.hero_image || fallbackHomePayload.hero.file_path,
+        media_type: settings.hero_media_type || fallbackHomePayload.hero.media_type || "image"
+      }
+    });
+  }
   try {
     return applySavedPortfolioCovers(await getHomePayloadFromSupabase());
   } catch (error) {
