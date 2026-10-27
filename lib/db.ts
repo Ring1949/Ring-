@@ -1,5 +1,17 @@
 import { getSupabaseServer } from "@/lib/supabase";
 import { defaultSettings, isSupabaseConfigError } from "@/lib/fallback-data";
+import { r2Configured, readLatestR2Json, writeR2Json } from "@/lib/r2";
+
+const SETTINGS_BACKUP_PREFIX = "site-state/v1/settings/";
+
+async function getR2Settings() {
+  if (!r2Configured()) return {};
+  try {
+    return await readLatestR2Json<Record<string, string>>(SETTINGS_BACKUP_PREFIX) || {};
+  } catch {
+    return {};
+  }
+}
 
 export function now() {
   return new Date().toISOString();
@@ -14,16 +26,20 @@ export function slugify(value: unknown) {
 }
 
 export async function getSettings(): Promise<Record<string, string>> {
+  let databaseSettings: Record<string, string> = {};
+  let databaseError: unknown = null;
   try {
     const { data, error } = await getSupabaseServer()
       .from("settings")
       .select("key,value");
     if (error) throw error;
-    return { ...defaultSettings, ...Object.fromEntries((data || []).map((row: any) => [row.key, row.value ?? ""])) };
+    databaseSettings = Object.fromEntries((data || []).map((row: any) => [row.key, row.value ?? ""]));
   } catch (error) {
-    if (isSupabaseConfigError(error)) return defaultSettings;
-    throw error;
+    databaseError = error;
   }
+  const r2Settings = await getR2Settings();
+  if (databaseError && !Object.keys(r2Settings).length && !isSupabaseConfigError(databaseError)) throw databaseError;
+  return { ...defaultSettings, ...databaseSettings, ...r2Settings };
 }
 
 export async function setSettings(values: Record<string, unknown>) {
@@ -32,15 +48,35 @@ export async function setSettings(values: Record<string, unknown>) {
     value: String(value ?? ""),
     updated_at: now()
   }));
-  if (rows.length) {
-    const { error } = await getSupabaseServer()
-      .from("settings")
-      .upsert(rows, { onConflict: "key" });
-    if (error) throw error;
+  const changed = Object.fromEntries(rows.map(({ key, value }) => [key, value]));
+  if (!rows.length) return changed;
+
+  let databaseError: unknown = null;
+  try {
+    const { error } = await getSupabaseServer().from("settings").upsert(rows, { onConflict: "key" });
+    if (error) throw new Error(error.message || "Supabase settings write failed");
+  } catch (error) {
+    databaseError = error;
   }
+
+  let backupError: unknown = null;
+  if (r2Configured()) {
+    try {
+      const current = await getR2Settings();
+      await writeR2Json(SETTINGS_BACKUP_PREFIX, { ...current, ...changed });
+    } catch (error) {
+      backupError = error;
+    }
+  }
+  if (databaseError && backupError) {
+    const databaseMessage = databaseError instanceof Error ? databaseError.message : "Supabase settings write failed";
+    const backupMessage = backupError instanceof Error ? backupError.message : "R2 settings backup failed";
+    throw new Error(`${databaseMessage}; ${backupMessage}`);
+  }
+  if (databaseError && !r2Configured()) throw databaseError;
   // The admin already holds the current settings in memory. Returning only the
   // changed values prevents every save from making a second full-table read.
-  return Object.fromEntries(rows.map(({ key, value }) => [key, value]));
+  return changed;
 }
 
 export async function replaceTagLinks(table: string, ownerColumn: string, ownerId: number, tagIds: unknown[] = []) {
