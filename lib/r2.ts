@@ -10,6 +10,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const R2_REGION = "auto";
 const PRESIGNED_UPLOAD_TTL_SECONDS = 15 * 60;
+const PRESIGNED_READ_TTL_SECONDS = 60 * 60;
 
 export type R2UploadKind = "media" | "cover" | "graph" | "skill" | "prompt" | "knowledge" | "poetry" | "thumbnail" | "legacy-media";
 
@@ -171,6 +172,15 @@ export async function verifyR2Object(key: string, expectedSize = 0) {
 export async function getR2Object(key: string) {
   const config = getR2Config();
   return getR2Client().send(new GetObjectCommand({ Bucket: config.bucket, Key: assertObjectKey(key) }));
+}
+
+export async function createR2PresignedRead(key: string) {
+  const config = getR2Config();
+  return getSignedUrl(
+    getR2Client(),
+    new GetObjectCommand({ Bucket: config.bucket, Key: assertObjectKey(key) }),
+    { expiresIn: PRESIGNED_READ_TTL_SECONDS }
+  );
 }
 
 export async function readLatestR2Json<T>(prefix: string): Promise<T | null> {

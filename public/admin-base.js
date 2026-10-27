@@ -32,27 +32,38 @@ function notify(message, error = false) {
 const formDataObject = (form) => Object.fromEntries(new FormData(form));
 const optionList = (items, selected, empty = "未选择") => `<option value="">${empty}</option>${items.map((item) => `<option value="${item.id}" ${String(item.id)===String(selected)?"selected":""}>${escapeHtml(item.name || item.title)}</option>`).join("")}`;
 
-async function uploadHeroBackgroundFile(file) {
-  const signed = await request("/api/media/upload-sign", {
+function heroContentType(file) {
+  if (file.type) return file.type;
+  const extension = String(file.name || "").split(".").pop().toLowerCase();
+  return ({ mp4:"video/mp4", m4v:"video/mp4", mov:"video/quicktime", webm:"video/webm" })[extension] || "application/octet-stream";
+}
+
+function uploadHeroObject(url, file, headers, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    Object.entries(headers || {}).forEach(([name, value]) => xhr.setRequestHeader(name, value));
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round(event.loaded / event.total * 100));
+    });
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`对象存储返回 ${xhr.status}${xhr.responseText ? `：${xhr.responseText}` : ""}`));
+    });
+    xhr.addEventListener("error", () => reject(new Error("无法连接到对象存储，请检查网络或 R2 CORS 设置。")));
+    xhr.addEventListener("abort", () => reject(new Error("上传已取消。")));
+    xhr.send(file);
+  });
+}
+
+async function uploadHeroBackgroundFile(file, onProgress) {
+  const contentType = heroContentType(file);
+  const signed = await request("/api/r2/upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size })
+    body: JSON.stringify({ kind: "legacy-media", filename: file.name, contentType, size: file.size })
   });
-  const body = file;
-  let uploadResponse;
-  try {
-    uploadResponse = await fetch(signed.signed_url, {
-      method: "PUT",
-      headers: signed.upload_headers || {},
-      body
-    });
-  } catch {
-    throw new Error("主视觉文件上传失败：无法连接到对象存储，请检查 R2 CORS 与网络后重试。");
-  }
-  if (!uploadResponse.ok) {
-    const detail = await uploadResponse.text().catch(() => "");
-    throw new Error(`Hero file upload failed: ${uploadResponse.status} ${detail}`.trim());
-  }
+  await uploadHeroObject(signed.upload_url || signed.signed_url, file, signed.upload_headers, onProgress);
   return request("/api/media/direct-record", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,7 +71,16 @@ async function uploadHeroBackgroundFile(file) {
       title: "首页全屏背景",
       is_hero: true,
       show_in_database: false,
-      files: [signed]
+      files: [{
+        ...signed,
+        filename: signed.object_key.split("/").pop(),
+        storage_path: signed.object_key,
+        public_url: signed.url,
+        originalname: file.name,
+        mimetype: contentType,
+        size: file.size,
+        storage_provider: "r2"
+      }]
     })
   });
 }
@@ -116,7 +136,9 @@ settingsForm.addEventListener("submit", async (event) => {
     state.settings = { ...state.settings, ...savedSettings };
     if (heroFile?.size) {
       setStatus("\u9996\u9875\u6587\u6848\u5df2\u4fdd\u5b58\uff0c\u6b63\u5728\u4e0a\u4f20\u80cc\u666f\u6587\u4ef6\u2026", "working");
-      await uploadHeroBackgroundFile(heroFile);
+      await uploadHeroBackgroundFile(heroFile, (percentage) => {
+        setStatus(`\u6b63\u5728\u4e0a\u4f20\u9996\u9875\u80cc\u666f\u2026 ${percentage}%`, "working");
+      });
       settingsForm.hero_background_file.value = "";
       document.querySelector("#hero-file-name").textContent = "\u672a\u9009\u62e9\u65b0\u6587\u4ef6\u65f6\uff0c\u4fdd\u7559\u5f53\u524d\u80cc\u666f";
       document.querySelector("#hero-file-preview").innerHTML = "";
