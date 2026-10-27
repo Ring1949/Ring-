@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import HomeReturnLink from "@/components/navigation/HomeReturnLink";
 import { uploadFile } from "@/lib/storage-client";
 import styles from "./skill-library.module.css";
 
@@ -51,7 +52,7 @@ export function SkillLibraryClient() {
   const remove = async (skill: Skill) => { setMenu(""); if (!confirm(`确定删除 Skill「${skill.name}」和它保存的文件吗？`)) return; const response = await fetch(`/api/skills/${skill.id}`, { method: "DELETE" }); const payload = await response.json(); if (!response.ok) { alert(payload.error || "删除失败"); return; } setDetail((current) => current?.id === skill.id ? null : current); setSkills((all) => all.filter((item) => item.id !== skill.id)); };
 
   return <main className={styles.page} onClick={() => setMenu("")}>
-    <header className={styles.header}><Link href="/" className={styles.brand} aria-label="返回 Ring 首页"/><nav><Link href="/prompt-library">Prompt 库</Link></nav></header>
+    <header className={styles.header}><HomeReturnLink className={styles.brand} aria-label="返回 Ring 首页"/><nav><Link href="/prompt-library">Prompt 库</Link></nav></header>
     <section className={styles.library}>
       <div className={styles.titleRow}><h1>Skill 库</h1><button className={styles.add} type="button" aria-label="添加 Skill" onClick={(event) => { event.stopPropagation(); setEditing(null); }}>＋</button></div>
       <label className={styles.search}><span aria-hidden="true"/><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 Skill..."/><kbd>⌘K</kbd></label>

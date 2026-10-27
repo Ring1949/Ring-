@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent,useEffect,useMemo,useRef,useState } from "react";
+import HomeReturnLink from "@/components/navigation/HomeReturnLink";
 import { CoverflowCarousel,type CoverflowSlide } from "@/components/ui/coverflow-carousel";
 import { uploadFile } from "@/lib/storage-client";
 import styles from "./poetry-library.module.css";
@@ -31,7 +32,7 @@ export function PoetryLibraryClient(){
   const slides=useMemo<CoverflowSlide[]>(()=>cards.map((card)=>({src:card.src,alt:`${card.title}封面`,title:card.title,subtitle:card.author,objectPosition:card.position})),[cards]);
   const removeSelected=async()=>{if(!selected?.deletable||deleting)return;if(!confirm(`确定删除诗词卡片「${selected.title}」及其图片吗？`))return;try{setDeleting(true);const response=await fetch(`/api/poetry-cards/${selected.id}`,{method:"DELETE"}),payload=await response.json();if(!response.ok)throw new Error(payload.error||"删除失败");setSelected(null);setNotice("");await load()}catch(error){setNotice(error instanceof Error?error.message:"删除失败")}finally{setDeleting(false)}};
   return <main className={styles.page} style={{position:"fixed",inset:0}}>
-    <Link className={styles.homeLogo} href="/" aria-label="返回 Ring 网站首页" title="返回首页"/>
+    <HomeReturnLink className={styles.homeLogo} aria-label="返回 Ring 网站首页" title="返回首页"/>
     <section className={styles.carousel} style={{maxWidth:"none",paddingLeft:0,paddingRight:0}}><button className={styles.add} aria-label="添加诗词卡片" title="添加诗词卡片" onClick={()=>setEditing(true)}/>{notice?<div className={styles.notice}>{notice}</div>:null}<CoverflowCarousel slides={slides} cardWidth="clamp(210px, 28vw, 360px)" showNavigation={false} showPagination={false} showCardLabel={false} wheelNavigation openOnClick onSelect={(index)=>setSelected(cards[index])}/></section>
     {selected?<div className={overlay.lightbox} role="dialog" aria-modal="true" aria-label={`${selected.title}完整图片`} onClick={()=>setSelected(null)}><button className={overlay.lightboxClose} aria-label="关闭完整图片">×</button><img src={selected.src} alt={`${selected.title}完整图片`} onClick={(event)=>event.stopPropagation()}/>{selected.deletable?<button type="button" className={overlay.lightboxDelete} disabled={deleting} onClick={(event)=>{event.stopPropagation();void removeSelected()}}>{deleting?"正在删除…":"删除这张诗词卡片"}</button>:null}</div>:null}
     {editing?<CardEditor close={()=>setEditing(false)} saved={async()=>{setEditing(false);setNotice("");await load()}} fileRef={fileRef}/>:null}

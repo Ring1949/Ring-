@@ -2,12 +2,30 @@ const fallbackCovers = ["visual-a","visual-b","visual-c","visual-d","visual-e"];
 let recommended = [];
 let recommendIndex = 0;
 let recommendVirtualItems = [];
+const HOME_PAYLOAD_CACHE_KEY = "ring:home-payload-cache";
+const HOME_PAYLOAD_CACHE_AGE = 30 * 60 * 1000;
+
+function readHomePayloadCache(){
+  try{
+    const cached=JSON.parse(sessionStorage.getItem(HOME_PAYLOAD_CACHE_KEY)||"null");
+    return cached&&Date.now()-cached.savedAt<HOME_PAYLOAD_CACHE_AGE?cached.payload:null;
+  }catch{return null;}
+}
+
+function saveHomePayloadCache(payload){
+  try{sessionStorage.setItem(HOME_PAYLOAD_CACHE_KEY,JSON.stringify({savedAt:Date.now(),payload}));}catch{/* continue without cache */}
+  return payload;
+}
 
 async function initHome() {
-  const homeRequest = api("/api/home");
+  const cachedHome=readHomePayloadCache();
+  let returning=false;
+  try{returning=sessionStorage.getItem("ring:home-returning")==="1";sessionStorage.removeItem("ring:home-returning");}catch{/* continue normally */}
+  const homeRequest=cachedHome?Promise.resolve(cachedHome):api("/api/home").then(saveHomePayloadCache);
   window.__ringHomePromise = homeRequest;
   const home = await homeRequest;
   window.__ringHomePayload = home;
+  if(cachedHome&&!returning){api("/api/home").then(saveHomePayloadCache).catch(()=>undefined);}
   const { settings, hero } = home;
   document.title = `${settings.site_name || "山川行止"} — 个人视觉档案`;
   document.querySelector("#hero-title").textContent = settings.hero_title || settings.site_name;
@@ -162,7 +180,20 @@ function setupWorksLibraryBorderGlow(){
     card.addEventListener("pointerleave",()=>card.style.setProperty("--edge-proximity","0"));
   });
 }
+function setupExtensionHomeSnapshot(){
+  if(window.__ringExtensionSnapshotReady)return;
+  window.__ringExtensionSnapshotReady=true;
+  const extensionPaths=new Set(["/extensions","/skill-library","/prompt-library","/knowledge-library","/poetry-library","/novel-studio"]);
+  document.addEventListener("click",(event)=>{
+    const anchor=event.target.closest?.("a[href]");
+    if(!anchor)return;
+    const target=new URL(anchor.href,location.href);
+    if(target.origin!==location.origin||!extensionPaths.has(target.pathname))return;
+    try{sessionStorage.setItem("ring:home-history-entry",JSON.stringify({historyLength:history.length,href:location.href,createdAt:Date.now()}));}catch{/* normal navigation remains available */}
+  },true);
+}
 setupWorksLibraryBorderGlow();
+setupExtensionHomeSnapshot();
 document.querySelector(".carousel-button.left").addEventListener("click", () => moveRecommend(-1));
 document.querySelector(".carousel-button.right").addEventListener("click", () => moveRecommend(1));
 let recommendResizeFrame = 0;

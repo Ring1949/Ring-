@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import HomeReturnLink from "@/components/navigation/HomeReturnLink";
 import { uploadFile } from "@/lib/storage-client";
 import base from "../prompt-library/prompt-library.module.css";
 import styles from "./knowledge-library.module.css";
@@ -71,7 +72,7 @@ export function KnowledgeLibraryClient() {
 
   return <main className={base.page} onClick={() => setMenu("")}>
     <header className={base.header}>
-      <Link href="/" className={base.brand} aria-label="返回 Ring 首页" />
+      <HomeReturnLink className={base.brand} aria-label="返回 Ring 首页" />
       <nav><Link href="/prompt-library">Prompt 库</Link></nav>
     </header>
     <section className={base.library}>

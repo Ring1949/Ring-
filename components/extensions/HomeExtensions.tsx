@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import CardSwap, { Card } from "./CardSwap";
 import { extensionProjects } from "@/lib/extension-projects";
+import { rememberHomeHistoryEntry } from "@/components/navigation/HomeReturnLink";
 import styles from "./home-extensions.module.css";
 
 const sizingFor = (viewport: number) => {
@@ -14,12 +14,12 @@ const sizingFor = (viewport: number) => {
 };
 
 export default function HomeExtensions() {
-  const router = useRouter();
   const [sizing, setSizing] = useState(() => sizingFor(1280));
   const navigate = (index: number) => {
     const project = extensionProjects[index];
     if (!project) return;
-    router.push(project.href);
+    rememberHomeHistoryEntry();
+    window.location.assign(project.href);
   };
   useEffect(() => {
     const update = () => setSizing(sizingFor(window.innerWidth));

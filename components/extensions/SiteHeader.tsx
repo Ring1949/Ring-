@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Script from "next/script";
 import { useEffect } from "react";
+import HomeReturnLink from "@/components/navigation/HomeReturnLink";
 
 type SiteHeaderProps = { active?: "extensions" };
 
@@ -24,9 +25,9 @@ export default function SiteHeader({ active }: SiteHeaderProps) {
   }, []);
   return <>
     <header className="nav nav-scrolled site-nav">
-      <Link className="logo" href="/" aria-label="返回首页" />
+      <HomeReturnLink className="logo" aria-label="返回首页" />
       <nav className="nav-links" aria-label="主导航">
-        <Link href="/">首页</Link>
+        <HomeReturnLink>首页</HomeReturnLink>
         <Link href="/series.html">系列作品</Link>
         <Link href="/works.html?category=all">作品库</Link>
         <Link className={active === "extensions" ? "active" : ""} aria-current={active === "extensions" ? "page" : undefined} href="/extensions">扩展</Link>

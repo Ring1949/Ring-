@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import HomeReturnLink from "@/components/navigation/HomeReturnLink";
 import { uploadFile } from "@/lib/storage-client";
 import styles from "./prompt-library.module.css";
 
@@ -31,7 +32,7 @@ export function PromptLibraryClient(){
   const cycleColor=(item:Prompt)=>{setMenu("");setColors((current)=>{const next={...current,[item.id]:((current[item.id]??Math.abs(item.id.split("").reduce((sum,char)=>sum+char.charCodeAt(0),0)))+1)%palettes.length};localStorage.setItem("prompt-card-colors",JSON.stringify(next));return next})};
   const duplicate=async(item:Prompt)=>{setMenu("");const response=await fetch("/api/prompts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:`${item.title} 副本`,category:item.category,description:item.description,content:item.content,tags:item.tags})});const payload=await response.json();if(!response.ok){alert(payload.error||"复制副本失败");return}await load()};
   return <main className={styles.page} onClick={()=>setMenu("")}>
-    <header className={styles.header}><Link href="/" className={styles.brand} aria-label="返回 Ring 首页"/><nav><Link href="/skill-library">Skill 库</Link></nav></header>
+    <header className={styles.header}><HomeReturnLink className={styles.brand} aria-label="返回 Ring 首页"/><nav><Link href="/skill-library">Skill 库</Link></nav></header>
     <section className={styles.library}>
       <div className={styles.titleRow}><h1>提示词库</h1><button className={styles.add} type="button" aria-label="新建提示词" onClick={(e)=>{e.stopPropagation();setEditing(null)}}>＋</button></div>
       <label className={styles.search}><span aria-hidden="true"/><input ref={searchRef} value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="搜索 Prompt..."/><kbd>⌘K</kbd></label>

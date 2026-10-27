@@ -2,6 +2,10 @@ const api = async (url, options = {}) => {
   const response = await fetch(url, options);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "请求失败");
+  const method = String(options.method || "GET").toUpperCase();
+  if (method !== "GET") {
+    try { sessionStorage.removeItem("ring:home-payload-cache"); } catch { /* storage can be unavailable */ }
+  }
   return payload;
 };
 
