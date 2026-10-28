@@ -1,5 +1,5 @@
 const state = { settings:{}, categories:[], projects:[], media:[], tags:[], workFilters:{} };
-const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4e0a\u4f20\u4f5c\u54c1",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u4f5c\u54c1\u7ba1\u7406",filters:"\u7b5b\u9009\u5206\u7c7b",contact:"\u8054\u7cfb\u65b9\u5f0f" };
+const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4f5c\u54c1\u5de5\u4f5c\u53f0",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u5206\u7c7b\u4e0e\u6807\u7b7e",filters:"\u4f5c\u54c1\u5e93\u7b5b\u9009",contact:"\u8054\u7cfb\u65b9\u5f0f" };
 
 const REQUEST_TIMEOUT_MS = 45000;
 function readableRequestError(error, action = "操作") {
@@ -96,13 +96,17 @@ async function bootstrap() {
 }
 document.querySelector("#logout").addEventListener("click", async () => { await request("/api/logout",{method:"POST"}); location.reload(); });
 
-document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
-  document.querySelectorAll("[data-view]").forEach((item) => item.classList.toggle("active",item===button));
-  document.querySelectorAll("[data-panel]").forEach((panel) => panel.classList.toggle("active",panel.dataset.panel===button.dataset.view));
-  document.querySelector("#view-title").textContent = viewNames[button.dataset.view];
-}));
+function openAdminView(view, activeButton = null) {
+  const panel=document.querySelector(`[data-panel="${view}"]`);
+  if(!panel)return;
+  document.querySelectorAll("[data-view]").forEach((item) => item.classList.toggle("active",item===activeButton || (!activeButton && item.dataset.view===view)));
+  document.querySelectorAll("[data-panel]").forEach((item) => item.classList.toggle("active",item===panel));
+  document.querySelector("#view-title").textContent = viewNames[view] || "内容管理";
+  history.replaceState(null,"",`#${view}`);
+}
+document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openAdminView(button.dataset.view,button)));
 document.querySelectorAll("[data-jump-view]").forEach((button) => button.addEventListener("click", () => {
-  document.querySelector(`[data-view="${button.dataset.jumpView}"]`)?.click();
+  openAdminView(button.dataset.jumpView);
 }));
 
 async function loadAll() {
@@ -110,6 +114,7 @@ async function loadAll() {
     request("/api/settings"),request("/api/categories"),request("/api/projects"),request("/api/media"),request("/api/tags"),request("/api/work-filters")
   ]);
   renderSettings(); renderCategories(); renderProjects(); renderMedia(); renderTags(); renderWorkFilters(); populateSelects();
+  const requested=location.hash.slice(1);if(requested)openAdminView(requested);
 }
 
 function renderSettings() {
@@ -324,7 +329,7 @@ function openCategoryModal(item={}) {
     <div class="field"><label>Slug</label><input name="slug" value="${escapeHtml(item.slug||"")}"></div>
     <div class="field wide"><label>描述</label><textarea name="description">${escapeHtml(item.description||"")}</textarea></div>
     <div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
-    <div class="field"><label>封面</label><a class="admin-cover-link" href="/admin/uploads#cover-manager">前往统一封面设置 →</a></div><button class="primary wide">保存分类</button></form>`);
+    <div class="field"><label>封面</label><a class="admin-cover-link" href="/admin/uploads?tab=covers&target=category:${item.id||""}#cover-manager">选择或更换封面 →</a></div><button class="primary wide">保存分类</button></form>`);
   document.querySelector("#category-form").addEventListener("submit",saveCategory);
 }
 async function saveCategory(event) {
@@ -340,7 +345,7 @@ function openProjectModal(item={}) {
     <div class="field"><label>年份</label><input name="year" value="${escapeHtml(item.year||"")}"></div><div class="field"><label>地点</label><input name="location" value="${escapeHtml(item.location||"")}"></div>
     <div class="field wide"><label>描述</label><textarea name="description" rows="5">${escapeHtml(item.description||"")}</textarea></div>
     <div class="field wide"><label>文字标签（逗号分隔）</label><input name="tags" value="${escapeHtml(item.tags||"")}"></div>
-    <div class="field"><label>系列封面</label><a class="admin-cover-link" href="/admin/uploads#cover-manager">前往统一封面设置 →</a></div><div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
+    <div class="field"><label>系列封面</label><a class="admin-cover-link" href="/admin/uploads?tab=covers&target=project:${item.id||""}#cover-manager">选择或更换封面 →</a></div><div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
     <div class="field"><label>状态</label><select name="status"><option value="draft" ${item.status==="draft"?"selected":""}>草稿</option><option value="published" ${item.status==="published"?"selected":""}>已发布</option></select></div>
     <div class="checks"><label><input name="is_featured" type="checkbox" ${item.is_featured?"checked":""}> 首页精选</label><label><input name="is_recommended" type="checkbox" ${item.is_recommended?"checked":""}> 推荐内容</label></div>
     <div class="field wide"><label>标签</label><div class="checks project-edit-tags">${state.tags.map((tag)=>`<label class="system-tag-option"><input name="tag_ids" value="${tag.id}" type="checkbox" ${selectedTags.includes(tag.id)?"checked":""}><span>${escapeHtml(tag.name)}</span></label>`).join("")}</div></div>

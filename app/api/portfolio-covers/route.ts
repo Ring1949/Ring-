@@ -30,29 +30,31 @@ export async function POST(request: NextRequest) {
     if (!kind || !targetId || !findTarget(kind, targetId)) {
       return NextResponse.json({ error: "没有找到要设置封面的作品或分类。" }, { status: 404 });
     }
+    const existingUrl = String(body.existing_url || "").trim();
+    if (existingUrl && !/^https?:\/\//i.test(existingUrl) && !existingUrl.startsWith("/")) {
+      return NextResponse.json({ error: "现有素材地址无效。" }, { status: 400 });
+    }
     const maximumSize = Math.min(Number(process.env.MEDIA_FILE_MAX_BYTES) || DEFAULT_MEDIA_MAX_BYTES, MAX_COVER_BYTES);
-    const metadata = await verifyUploadedObject({
-      url: String(body.url || ""),
-      pathname: String(body.pathname || ""),
-      expectedSize: Number(body.size) || 0,
-      prefix: MEDIA_FILE_PREFIX,
-      maximumSize,
+    const metadata = existingUrl ? null : await verifyUploadedObject({
+      url: String(body.url || ""), pathname: String(body.pathname || ""), expectedSize: Number(body.size) || 0,
+      prefix: MEDIA_FILE_PREFIX, maximumSize,
       storageProvider: String(body.storage_provider || body.storageProvider || body.provider || "")
     });
-    if (!metadata.contentType?.startsWith("image/")) {
+    if (metadata && !metadata.contentType?.startsWith("image/")) {
       return NextResponse.json({ error: "封面必须是图片文件。" }, { status: 400 });
     }
+    const coverImage = existingUrl || metadata?.url || "";
     const current = await getPortfolioCoverOverrides();
     const bucket = kind === "category" ? "categories" : "projects";
     const saved = await savePortfolioCoverOverrides({
       ...current,
-      [bucket]: { ...current[bucket], [targetId]: metadata.url }
+      [bucket]: { ...current[bucket], [targetId]: coverImage }
     });
     return NextResponse.json({
       saved: true,
       kind,
       target_id: targetId,
-      cover_image: metadata.url,
+      cover_image: coverImage,
       version: saved.version,
       updated_at: saved.updated_at
     });

@@ -14,11 +14,9 @@
       <a class="admin-logo" href="/"></a>
       <nav>
         <button class="active" data-view="settings">首页设置</button>
-        <a class="admin-nav-link" href="/admin/uploads">上传作品</a>
+        <a class="admin-nav-link" href="/admin/uploads">作品工作台</a>
         <button data-view="projects">系列管理</button>
-        <button data-view="categories">作品管理</button>
-        <button data-view="filters">筛选分类</button>
-        <a class="admin-nav-link" href="/admin/graph">关系图谱</a>
+        <button data-view="categories">分类与标签</button>
         <button data-view="contact">联系方式</button>
       </nav>
       <div><a href="/" target="_blank">查看网站 ↗</a><button id="logout">退出登录</button></div>
@@ -56,7 +54,7 @@
       </section>
 
       <section class="admin-view" data-panel="categories">
-        <div class="toolbar"><button class="primary" data-new="category">＋ 新增作品分类</button></div>
+        <div class="toolbar"><button class="primary" data-new="category">＋ 新增作品分类</button><button data-jump-view="filters">编辑作品库筛选</button><a class="admin-nav-link" href="/admin/graph">关系图谱 →</a></div>
         <div id="category-list" class="admin-list"></div>
         <div class="taxonomy-section">
           <p>WORK TAGS</p><h2>作品标签</h2>
@@ -66,6 +64,7 @@
       </section>
 
       <section class="admin-view" data-panel="filters">
+        <div class="toolbar"><button data-jump-view="categories">← 返回分类与标签</button></div>
         <div class="taxonomy-header">
           <p>WORKS NAVIGATION</p><h2>作品库筛选分类</h2>
           <span>这里控制作品库顶部的筛选标签。删除标签不会删除作品，作品仍保留在“全部”中。</span>
