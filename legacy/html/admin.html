@@ -6,7 +6,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin.css?v=20260831-work-filters-1">
-  <link rel="stylesheet" href="/admin-workspace.css?v=20261028-1">
+  <link rel="stylesheet" href="/admin-workspace.css?v=20261028-2">
   <link rel="stylesheet" href="/glass-surface.css?v=20260702-1">
 </head>
 <body>
@@ -15,11 +15,11 @@
       <a class="admin-logo" href="/admin" aria-label="返回内容后台"><b>RING</b><span>内容后台</span></a>
       <nav>
         <button class="active" data-view="settings">首页设置</button>
+        <button data-view="media">作品工作台</button>
         <button data-view="projects">系列管理</button>
         <button data-view="categories">分类与标签</button>
         <button data-view="contact">联系方式</button>
       </nav>
-      <a class="admin-workbench-entry" href="/admin/uploads"><span>作品工作台</span><small>独立管理页面 ↗</small></a>
       <div class="admin-sidebar-actions"><a href="/" target="_blank">查看网站 ↗</a><button id="logout">退出登录</button></div>
     </aside>
     <section class="admin-main">
@@ -28,7 +28,7 @@
       <section class="admin-view active" data-panel="settings">
         <div class="admin-tip">
           <div><b>首页背景直接选择本地文件</b><span>图片保持静止；视频会静音、自动播放并循环。</span></div>
-          <a href="/admin/uploads">打开作品上传</a>
+          <button type="button" data-jump-view="media">打开作品上传</button>
         </div>
         <form id="settings-form" class="form-card">
           <div class="field"><label>网站名称</label><input name="site_name"></div>
