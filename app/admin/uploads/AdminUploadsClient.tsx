@@ -182,7 +182,7 @@ export function AdminUploadsClient() {
   };
 
   return <>
-    <header className={styles.workspaceTopbar}><Link className={styles.workspaceBrand} href="/admin">RING <span>内容后台</span></Link><nav><Link href="/admin">首页</Link><b>作品</b><Link href="/admin#projects">系列</Link><Link href="/admin#categories">分类</Link><Link href="/admin#contact">联系方式</Link></nav><Link className={styles.viewSite} href="/" target="_blank">查看网站 ↗</Link></header>
+    <header className={styles.workspaceTopbar}><Link className={styles.workspaceBrand} href="/admin">RING <span>内容后台</span></Link><div className={styles.workspaceContext}>独立作品工作台</div><div className={styles.workspaceActions}><Link href="/admin">返回内容后台</Link><Link className={styles.viewSite} href="/" target="_blank">查看网站 ↗</Link></div></header>
     <div className={styles.workspace}>
       <section className={styles.workspaceIntro}><div><p>WORKS DESK</p><h1>作品工作台</h1><span>上传、整理与更换封面都在这里完成。</span></div><div className={styles.health}><i className={health?.ok ? styles.healthGood : ""} /><b>{health?.ok ? "存储正常" : health?.error ? "存储异常" : "正在检查"}</b><small>{health?.storage ? `${health.storage.object_count} 个云端文件` : health?.error || ""}</small></div></section>
       <div className={styles.workspaceTabs} role="tablist">{([['upload','上传作品'],['library','素材库'],['covers','封面管理']] as [WorkspaceTab,string][]).map(([value,label]) => <button key={value} className={tab === value ? styles.tabActive : ""} onClick={() => setTab(value)}>{label}<span>{value === "library" ? media.length : ""}</span></button>)}</div>

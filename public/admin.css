@@ -100,6 +100,16 @@ body{background:#f1f2f4}
 }
 @media(prefers-reduced-motion:reduce){.primary:before{animation:none;left:42%}}
 
+/* Keep the standalone works desk outside the in-page settings directory. */
+.admin-workbench-entry{
+  margin-top:28px;padding:15px 16px;display:grid;gap:3px;border:1px solid #e7e9ed!important;border-radius:16px;
+  color:#25282d!important;background:#f7f8f9!important;transition:border-color .2s,background .2s,transform .2s
+}
+.admin-workbench-entry:hover{border-color:#cfd3d8!important;background:#fff!important;transform:translateY(-1px)}
+.admin-workbench-entry span{font-size:12px;font-weight:700}.admin-workbench-entry small{color:#9a9da3;font-size:9px;font-weight:500}
+@media(max-width:900px){.admin-workbench-entry{margin:0 0 0 12px;padding:10px 13px}.admin-workbench-entry small{display:none}}
+@media(max-width:600px){.admin-workbench-entry{margin-left:8px}.admin-workbench-entry span{font-size:0}.admin-workbench-entry span:before{content:"作品";font-size:11px}}
+
 /* Iridescent frosted pill button */
 .primary{
   position:relative;isolation:isolate;overflow:hidden;border:1px solid rgba(255,255,255,.95);
