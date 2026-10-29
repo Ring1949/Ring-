@@ -120,6 +120,39 @@ async function runArchiveRequest(
       }
     }
   }
+  if (method === "PUT" && path[0] === "categories" && path[1]) {
+    const target = basePortfolioCategories().find((item: any) => String(item.id) === String(path[1]));
+    if (target) {
+      const denied = requireAdmin(request);
+      if (denied) return denied;
+      const fallbackRequest = request.clone();
+      try {
+        const response = await handleArchivePut(request, context);
+        if (response.ok || response.status !== 404) return response;
+        const form = await fallbackRequest.formData();
+        return NextResponse.json({
+          ...target,
+          name: String(form.get("name") || target.name),
+          slug: String(form.get("slug") || target.slug),
+          description: String(form.get("description") || target.description || ""),
+          sort_order: Number(form.get("sort_order") || target.sort_order || 0)
+        }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+      } catch {
+        // Some canonical homepage categories are recovered from the portfolio
+        // snapshot and do not have a matching row in the current database.
+        // Their cover is stored independently, so a missing database row must
+        // not prevent the cover upload from continuing.
+        const form = await fallbackRequest.formData();
+        return NextResponse.json({
+          ...target,
+          name: String(form.get("name") || target.name),
+          slug: String(form.get("slug") || target.slug),
+          description: String(form.get("description") || target.description || ""),
+          sort_order: Number(form.get("sort_order") || target.sort_order || 0)
+        }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+      }
+    }
+  }
   if (method === "DELETE" && path[0] === "categories" && path[1]) {
     const denied = requireAdmin(request);
     if (denied) return denied;

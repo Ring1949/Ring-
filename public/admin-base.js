@@ -379,7 +379,8 @@ async function saveCategory(event) {
   const submit=form.querySelector("button[type=submit],button.primary"), status=form.querySelector(".category-cover-status");
   submit.disabled=true;
   try {
-    status.textContent="正在保存分类资料…";
+    const hasNewCover=Boolean(coverFile?.size||existingCover);
+    status.textContent=hasNewCover?"正在准备分类封面…":"正在保存分类资料…";
     const saved=await request(id?`/api/categories/${id}`:"/api/categories",{method:id?"PUT":"POST",body:data});
     const categoryId=saved.id||id;
     if(coverFile?.size){
@@ -389,7 +390,8 @@ async function saveCategory(event) {
       status.textContent="正在设置分类封面…";
       await useExistingCategoryCover(categoryId,existingCover);
     }
-    closeModal();await loadAll();notify("分类与封面已保存");
+    status.textContent="保存完成";
+    closeModal();await loadAll();notify(hasNewCover?"分类封面已更新":"分类已保存");
   }catch(error){status.textContent=error.message||"保存失败";notify(error.message||"分类保存失败",true);}
   finally{submit.disabled=false;}
 }
