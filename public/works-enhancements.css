@@ -7,8 +7,7 @@ body{font-family:"Manrope","Noto Sans SC",sans-serif;background:#f8f8f6}
 .heading{padding-top:38px;margin-bottom:32px}.heading>p{display:block;margin:0 0 8px;color:#aaa;font-size:9px;letter-spacing:.2em}
 .heading h1{color:#272825;font-size:42px;font-weight:500;letter-spacing:-.04em}
 .primary-filters{margin:24px auto 0;display:flex;justify-content:center;gap:5px;overflow:visible;scrollbar-width:none}
-.primary-filters a{padding:8px 13px;border-radius:999px;color:#92938f;font-size:10px;white-space:nowrap}
-.primary-filters a.active{color:#fff;background:#252624}
+.primary-filters:empty{display:none}
 .heading-row{margin-top:17px}.heading-row input{right:max(19px,calc((100vw - 1500px)/2))}
 .subfilters{min-height:46px;margin:28px 0 0;padding:13px 0;display:flex;align-items:center;justify-content:flex-start;gap:8px;overflow:visible;border-top:1px solid #dedfdb;border-bottom:1px solid #dedfdb;scrollbar-width:none}
 .subfilters>span{margin-right:10px;color:#aaa;font-size:9px;letter-spacing:.15em}
@@ -26,7 +25,7 @@ body{font-family:"Manrope","Noto Sans SC",sans-serif;background:#f8f8f6}
 body{background:var(--works-bg);color:var(--works-ink);transition:background .35s,color .35s}
 .works-nav{background:color-mix(in srgb,var(--works-bg) 88%,transparent);border-bottom-color:var(--works-line)}
 .main-nav a,.heading p,.heading-row,.empty{color:var(--works-sub)!important}.main-nav a.active,.heading h1{color:var(--works-ink)!important}
-.primary-filters a,.subfilters button,#search{border-color:var(--works-line);background:var(--works-panel);color:var(--works-ink)}
+.subfilters button,#search{border-color:var(--works-line);background:var(--works-panel);color:var(--works-ink)}
 .grid article,.grid a,.media-card{background:var(--works-panel);border-color:var(--works-line)}
 #detail{background:var(--works-panel);color:var(--works-ink)}
 .theme-toggle{width:38px;height:38px;padding:0;display:grid;place-items:center;border:1px solid rgba(20,22,25,.12);border-radius:999px;color:var(--works-ink);background:linear-gradient(145deg,rgba(255,255,255,.92),rgba(229,232,232,.76));box-shadow:inset 0 1px rgba(255,255,255,.75),0 12px 30px rgba(20,24,28,.12);backdrop-filter:blur(16px) saturate(150%);cursor:pointer;transition:.25s}

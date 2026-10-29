@@ -59,7 +59,6 @@ const isFile = (item) => item.media_type === "file";
 document.title = `${title}｜作品库｜山川行止`;
 document.querySelector("#title").textContent = title;
 document.querySelector("#description").textContent = description;
-document.querySelectorAll("[data-category]").forEach((link) => link.classList.toggle("active", link.dataset.category === category));
 if (requested === "product") history.replaceState(null, "", "/works.html?category=photo&filter=product");
 
 function skeletons() {
