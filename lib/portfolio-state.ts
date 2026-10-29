@@ -1,6 +1,9 @@
 import { getRecoveredCategories, getRecoveredProjects } from "@/lib/recovered-data";
 import { importedPhotoLibrary, mergeImportedCategories } from "@/lib/photo-library";
 
+const CORE_CATEGORY_SLUGS = new Set(["photo", "graphic", "space", "ai", "other"]);
+const LEGACY_CATEGORY_SLUGS = new Set(["product", "interior", "motion", "daily", "database", "food", "three-d", "video"]);
+
 export type PortfolioCoverOverrides = {
   version: number;
   updated_at: string;
@@ -21,7 +24,35 @@ const emptyOverrides = (): PortfolioCoverOverrides => ({
 
 export function basePortfolioCategories() {
   return mergeImportedCategories(getRecoveredCategories())
-    .filter((item: any) => item.slug !== "product");
+    .filter((item: any) => CORE_CATEGORY_SLUGS.has(String(item.slug || "")))
+    .map((item: any) => ({ ...item, project_count: Number(item.project_count || 0) }));
+}
+
+export function mergePortfolioCategories(categories: any[], deleted: Record<string, string> = {}) {
+  const core = basePortfolioCategories();
+  const coreBySlug = new Map(core.map((item: any) => [String(item.slug), item]));
+  const merged = new Map<string, any>();
+
+  for (const item of core) merged.set(String(item.slug), item);
+  for (const item of categories || []) {
+    const slug = String(item?.slug || "");
+    if (!slug || LEGACY_CATEGORY_SLUGS.has(slug)) continue;
+    const canonical = coreBySlug.get(slug);
+    if (canonical) {
+      merged.set(slug, {
+        ...item,
+        name: canonical.name,
+        description: canonical.description,
+        sort_order: canonical.sort_order,
+        is_primary: 1,
+        project_count: Number(item.project_count || 0),
+        cover_image: item.cover_image || canonical.cover_image || ""
+      });
+      continue;
+    }
+    if (!deleted[String(item.id)]) merged.set(slug, { ...item, project_count: Number(item.project_count || 0) });
+  }
+  return [...merged.values()].sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
 }
 
 export function basePortfolioProjects() {
@@ -46,7 +77,7 @@ export function normalizeCoverOverrides(value: unknown): PortfolioCoverOverrides
 
 export function applyCategoryCoverOverrides(categories: any[], value: unknown) {
   const overrides = normalizeCoverOverrides(value);
-  return categories.filter((item) => !overrides.deleted_categories[String(item.id)]).map((item) => ({
+  return categories.filter((item) => CORE_CATEGORY_SLUGS.has(String(item.slug || "")) || !overrides.deleted_categories[String(item.id)]).map((item) => ({
     ...item,
     cover_image: overrides.categories[String(item.id)] || item.cover_image || ""
   }));

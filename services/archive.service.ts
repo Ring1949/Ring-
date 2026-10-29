@@ -282,7 +282,6 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
   if (route === "categories") {
     const includeAll = search.get("all") === "true" && isAdmin(request);
     let query = supabase.from("categories").select("*").order("sort_order", { ascending: true }).order("id", { ascending: true });
-    if (!includeAll) query = query.eq("is_primary", true);
     const { data, error } = await query;
     if (error) throw error;
     const categories = await Promise.all((data || []).map(async (category: any) => {
@@ -295,8 +294,11 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
       return normalizeCategory(category, count || 0);
     }));
     const product = categories.find((category: any) => category.slug === "product");
+    const coreSlugs = new Set(["photo", "graphic", "space", "ai", "other"]);
+    const legacySlugs = new Set(["product", "interior", "motion", "daily", "database", "food", "three-d", "video"]);
     return json(categories
       .filter((category: any) => category.slug !== "product")
+      .filter((category: any) => includeAll || coreSlugs.has(category.slug) || (category.is_primary && !legacySlugs.has(category.slug)))
       .map((category: any) => category.slug === "photo"
         ? {
             ...category,
@@ -304,7 +306,7 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
             description: "人物、现场、城市、产品与观看方式。",
             project_count: Number(category.project_count || 0) + Number(product?.project_count || 0)
           }
-        : category));
+        : { ...category, project_count: Number(category.project_count || 0) }));
   }
 
   if (route === "tags") {

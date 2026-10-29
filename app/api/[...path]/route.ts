@@ -14,7 +14,8 @@ import {
   applyCategoryCoverOverrides,
   applyProjectCoverOverrides,
   basePortfolioCategories,
-  basePortfolioProjects
+  basePortfolioProjects,
+  mergePortfolioCategories
 } from "@/lib/portfolio-state";
 import { requireAdmin } from "@/lib/utils";
 import { getArchiveTombstones, markArchiveItemDeleted, removeArchivedItems } from "@/lib/archive-tombstones";
@@ -35,7 +36,7 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
   if (route === "categories") {
     const deleted = await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }));
     const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
-    return NextResponse.json(removeArchivedItems(applyCategoryCoverOverrides(basePortfolioCategories(), overrides), deleted.categories));
+    return NextResponse.json(applyCategoryCoverOverrides(mergePortfolioCategories([], deleted.categories), overrides));
   }
   if (route === "tags") {
     const deleted = await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }));
@@ -185,7 +186,7 @@ async function runArchiveRequest(
               ? await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }))
               : { categories: {}, tags: {} };
             const overlaid = route === "categories"
-              ? removeArchivedItems(applyCategoryCoverOverrides(items, overrides), deleted.categories)
+              ? applyCategoryCoverOverrides(mergePortfolioCategories(items, deleted.categories), overrides)
               : applyProjectCoverOverrides(items, overrides);
             return NextResponse.json(overlaid, { status: response.status, headers: { "Cache-Control": "private, no-store" } });
           }

@@ -171,7 +171,7 @@ settingsForm.addEventListener("submit", async (event) => {
 function renderCategories() {
   document.querySelector("#category-list").innerHTML = state.categories.map((item) => `
     <article class="admin-row"><div class="admin-thumb">${item.cover_image?`<img src="${item.cover_image}">`:""}</div>
-    <div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.description)} · ${item.project_count} 个作品</p></div>
+    <div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.description)} · ${Number(item.project_count || 0)} 个作品</p></div>
     <div class="row-actions"><button data-edit-category="${item.id}">编辑</button><button class="danger" data-delete-category="${item.id}">删除</button></div></article>`).join("");
 }
 function renderProjects() {
