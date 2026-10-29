@@ -85,6 +85,38 @@ async function uploadHeroBackgroundFile(file, onProgress) {
   });
 }
 
+async function uploadCategoryCoverFile(file, categoryId, onProgress) {
+  if (!file?.type?.startsWith("image/")) throw new Error("分类封面必须是图片文件。");
+  if (file.size > 20 * 1024 * 1024) throw new Error("分类封面不能超过 20 MB。");
+  const signed = await request("/api/r2/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "cover", filename: file.name, contentType: file.type, size: file.size })
+  });
+  await uploadHeroObject(signed.upload_url || signed.signed_url, file, signed.upload_headers, onProgress);
+  return request("/api/portfolio-covers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kind: "category",
+      target_id: String(categoryId),
+      url: signed.url,
+      pathname: signed.object_key,
+      size: file.size,
+      content_type: file.type,
+      storage_provider: "r2"
+    })
+  });
+}
+
+async function useExistingCategoryCover(categoryId, url) {
+  return request("/api/portfolio-covers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "category", target_id: String(categoryId), existing_url: url })
+  });
+}
+
 async function bootstrap() {
   const me = await request("/api/me");
   if (!me.authenticated) {
@@ -329,17 +361,37 @@ async function removeItem(resource, id, label) {
 }
 
 function openCategoryModal(item={}) {
+  const coverAssets = state.media.filter((media) => media.file_path && (media.media_type === "image" || String(media.mime_type || "").startsWith("image/") || /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(media.file_path)));
   openModal(`<form id="category-form" class="modal-form" enctype="multipart/form-data"><h2>${item.id?"编辑":"新增"}分类</h2>
     <input type="hidden" name="id" value="${item.id||""}"><div class="field"><label>名称</label><input name="name" value="${escapeHtml(item.name||"")}" required></div>
     <div class="field"><label>Slug</label><input name="slug" value="${escapeHtml(item.slug||"")}"></div>
     <div class="field wide"><label>描述</label><textarea name="description">${escapeHtml(item.description||"")}</textarea></div>
     <div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
-    <div class="field"><label>封面</label><a class="admin-cover-link" href="/admin/uploads?tab=covers&target=category:${item.id||""}#cover-manager">选择或更换封面 →</a></div><button class="primary wide">保存分类</button></form>`);
+    <div class="field category-cover-field"><label>分类封面</label><div class="category-cover-preview">${item.cover_image?`<img src="${escapeHtml(item.cover_image)}" alt="当前分类封面">`:`<span>暂无封面</span>`}</div></div>
+    <div class="field category-cover-controls"><label>直接更换，不跳转页面</label><select name="existing_cover"><option value="">保留当前封面</option>${coverAssets.map((media)=>`<option value="${escapeHtml(media.file_path)}">使用素材 · ${escapeHtml(media.title||media.original_name||"未命名图片")}</option>`).join("")}</select><label class="category-cover-file"><input name="cover_file" type="file" accept="image/*"><span>或选择本地图片</span></label><small class="category-cover-status">选择后与分类资料一起保存</small></div>
+    <button class="primary wide">保存分类与封面</button></form>`);
   document.querySelector("#category-form").addEventListener("submit",saveCategory);
 }
 async function saveCategory(event) {
-  event.preventDefault(); const data=new FormData(event.target),id=data.get("id");data.delete("id");
-  await request(id?`/api/categories/${id}`:"/api/categories",{method:id?"PUT":"POST",body:data});closeModal();await loadAll();notify("分类已保存");
+  event.preventDefault();
+  const form=event.target, data=new FormData(form), id=data.get("id"), coverFile=data.get("cover_file"), existingCover=String(data.get("existing_cover")||"");
+  data.delete("id");data.delete("cover_file");data.delete("existing_cover");
+  const submit=form.querySelector("button[type=submit],button.primary"), status=form.querySelector(".category-cover-status");
+  submit.disabled=true;
+  try {
+    status.textContent="正在保存分类资料…";
+    const saved=await request(id?`/api/categories/${id}`:"/api/categories",{method:id?"PUT":"POST",body:data});
+    const categoryId=saved.id||id;
+    if(coverFile?.size){
+      status.textContent="正在上传分类封面…";
+      await uploadCategoryCoverFile(coverFile,categoryId,(percentage)=>status.textContent=`正在上传分类封面 ${percentage}%`);
+    }else if(existingCover){
+      status.textContent="正在设置分类封面…";
+      await useExistingCategoryCover(categoryId,existingCover);
+    }
+    closeModal();await loadAll();notify("分类与封面已保存");
+  }catch(error){status.textContent=error.message||"保存失败";notify(error.message||"分类保存失败",true);}
+  finally{submit.disabled=false;}
 }
 
 function openProjectModal(item={}) {

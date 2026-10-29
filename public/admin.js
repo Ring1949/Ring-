@@ -1,5 +1,5 @@
 const adminBase = document.createElement("script");
-adminBase.src = "admin-base.js?v=20261029-category-sync-3";
+adminBase.src = "admin-base.js?v=20261029-inline-category-cover-4";
 adminBase.onload = () => {
   const extension = document.createElement("script");
   extension.src = "admin-extension.js?v=20261029-category-delete-1";

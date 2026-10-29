@@ -11,13 +11,20 @@ import {
   verifyUploadedObject
 } from "@/lib/blob-library";
 import { basePortfolioCategories, basePortfolioProjects } from "@/lib/portfolio-state";
+import { getSupabaseServer } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/utils";
 
 const MAX_COVER_BYTES = 20 * 1024 * 1024;
 
-function findTarget(kind: string, id: string) {
+async function findTarget(kind: string, id: string) {
   const items = kind === "category" ? basePortfolioCategories() : kind === "project" ? basePortfolioProjects() : [];
-  return items.find((item: any) => String(item.id) === id) || null;
+  const recovered = items.find((item: any) => String(item.id) === id);
+  if (recovered) return recovered;
+  const table = kind === "category" ? "categories" : kind === "project" ? "projects" : "";
+  if (!table) return null;
+  const result = await getSupabaseServer().from(table).select("id").eq("id", id).maybeSingle();
+  if (result.error) throw result.error;
+  return result.data || null;
 }
 
 export async function POST(request: NextRequest) {
@@ -27,7 +34,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const kind = body.kind === "category" ? "category" : body.kind === "project" ? "project" : "";
     const targetId = String(body.target_id || "").trim();
-    if (!kind || !targetId || !findTarget(kind, targetId)) {
+    if (!kind || !targetId || !await findTarget(kind, targetId)) {
       return NextResponse.json({ error: "没有找到要设置封面的作品或分类。" }, { status: 404 });
     }
     const existingUrl = String(body.existing_url || "").trim();
