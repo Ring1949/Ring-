@@ -652,7 +652,14 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
   if (denied) return denied;
 
   if (path[0] === "tags" && path[1]) {
-    const { error } = await supabase.from("tags").delete().eq("id", Number(path[1]));
+    const tagId = Number(path[1]);
+    const [projectLinks, mediaLinks] = await Promise.all([
+      supabase.from("project_tags").delete().eq("tag_id", tagId),
+      supabase.from("media_tags").delete().eq("tag_id", tagId)
+    ]);
+    if (projectLinks.error) throw projectLinks.error;
+    if (mediaLinks.error) throw mediaLinks.error;
+    const { error } = await supabase.from("tags").delete().eq("id", tagId);
     if (error) throw error;
     return json({ deleted: true });
   }

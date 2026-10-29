@@ -303,7 +303,9 @@ async function removeItem(resource, id, label) {
   const itemName = item?.title || item?.name || label;
   const confirmMessage = resource === "categories"
     ? `确定删除${label}「${itemName}」吗？该分类下的作品和素材会保留，并转入未分类。`
-    : `确定删除${label}「${itemName}」吗？此操作无法撤销。`;
+    : resource === "tags"
+      ? `确定删除${label}「${itemName}」吗？作品和素材本身不会被删除。`
+      : `确定删除${label}「${itemName}」吗？此操作无法撤销。`;
   if (!confirm(confirmMessage)) return;
 
   const button = document.querySelector(`[data-delete-${resource === "projects" ? "project" : resource === "categories" ? "category" : resource === "media" ? "media" : "tag"}="${CSS.escape(String(id))}"]`);

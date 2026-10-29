@@ -17,6 +17,7 @@ import {
   basePortfolioProjects
 } from "@/lib/portfolio-state";
 import { requireAdmin } from "@/lib/utils";
+import { getArchiveTombstones, markArchiveItemDeleted, removeArchivedItems } from "@/lib/archive-tombstones";
 
 type ArchiveContext = { params: Promise<{ path: string[] }> };
 
@@ -32,10 +33,14 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
   if (route === "me") return NextResponse.json({ authenticated: false });
   if (route === "settings") return NextResponse.json(getRecoveredSettings());
   if (route === "categories") {
+    const deleted = await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }));
     const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
-    return NextResponse.json(applyCategoryCoverOverrides(basePortfolioCategories(), overrides));
+    return NextResponse.json(removeArchivedItems(applyCategoryCoverOverrides(basePortfolioCategories(), overrides), deleted.categories));
   }
-  if (route === "tags") return NextResponse.json(getRecoveredTags());
+  if (route === "tags") {
+    const deleted = await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }));
+    return NextResponse.json(removeArchivedItems(getRecoveredTags(), deleted.tags));
+  }
   if (route === "projects") {
     const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
     let projects = applyProjectCoverOverrides(basePortfolioProjects(), overrides);
@@ -118,30 +123,47 @@ async function runArchiveRequest(
     const denied = requireAdmin(request);
     if (denied) return denied;
     const target = basePortfolioCategories().find((item: any) => String(item.id) === String(path[1]));
-    if (target) {
-      try {
-        const current = await getPortfolioCoverOverrides();
-        const categoryId = String(target.id);
-        const categoryCovers = { ...current.categories };
-        delete categoryCovers[categoryId];
-        const saved = await savePortfolioCoverOverrides({
-          ...current,
-          categories: categoryCovers,
-          deleted_categories: {
-            ...current.deleted_categories,
-            [categoryId]: new Date().toISOString()
-          }
-        });
-        // Imported/recovered categories are hidden by the persistent deletion
-        // manifest. Matching database rows are cleaned up on a best-effort basis.
-        await handleArchiveDelete(request, context).catch(() => undefined);
-        return NextResponse.json({ deleted: true, category_id: categoryId, version: saved.version }, {
-          headers: { "Cache-Control": "private, no-store, max-age=0" }
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "分类删除失败";
-        return NextResponse.json({ error: `分类删除失败：${message}` }, { status: 500 });
+    try {
+      await handleArchiveDelete(request, context).catch(() => undefined);
+      await markArchiveItemDeleted("categories", path[1]);
+      if (target) {
+        try {
+          const current = await getPortfolioCoverOverrides();
+          const categoryId = String(target.id);
+          const categoryCovers = { ...current.categories };
+          delete categoryCovers[categoryId];
+          await savePortfolioCoverOverrides({
+            ...current,
+            categories: categoryCovers,
+            deleted_categories: {
+              ...current.deleted_categories,
+              [categoryId]: new Date().toISOString()
+            }
+          });
+        } catch {
+          // The settings tombstone above is authoritative. Blob cover state is optional.
+        }
       }
+      return NextResponse.json({ deleted: true, category_id: String(path[1]) }, {
+        headers: { "Cache-Control": "private, no-store, max-age=0" }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "分类删除失败";
+      return NextResponse.json({ error: `分类删除失败：${message}` }, { status: 500 });
+    }
+  }
+  if (method === "DELETE" && path[0] === "tags" && path[1]) {
+    const denied = requireAdmin(request);
+    if (denied) return denied;
+    try {
+      await handleArchiveDelete(request, context).catch(() => undefined);
+      await markArchiveItemDeleted("tags", path[1]);
+      return NextResponse.json({ deleted: true, tag_id: String(path[1]) }, {
+        headers: { "Cache-Control": "private, no-store, max-age=0" }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "标签删除失败";
+      return NextResponse.json({ error: `标签删除失败：${message}` }, { status: 500 });
     }
   }
   try {
@@ -151,12 +173,19 @@ async function runArchiveRequest(
       if (["projects", "media", "categories", "tags", "series"].includes(route)) {
         const body = await response.clone().text();
         if (body.trim() === "[]" || body.trim() === "{}" || body.trim() === "") return recoveredGet(request, context);
-        if ((route === "categories" || route === "projects" || route === "series") && response.ok) {
+        if ((route === "categories" || route === "projects" || route === "series" || route === "tags") && response.ok) {
           const items = JSON.parse(body);
           if (Array.isArray(items)) {
+            if (route === "tags") {
+              const deleted = await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }));
+              return NextResponse.json(removeArchivedItems(items, deleted.tags), { status: response.status, headers: { "Cache-Control": "private, no-store" } });
+            }
             const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
+            const deleted = route === "categories"
+              ? await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }))
+              : { categories: {}, tags: {} };
             const overlaid = route === "categories"
-              ? applyCategoryCoverOverrides(items, overrides)
+              ? removeArchivedItems(applyCategoryCoverOverrides(items, overrides), deleted.categories)
               : applyProjectCoverOverrides(items, overrides);
             return NextResponse.json(overlaid, { status: response.status, headers: { "Cache-Control": "private, no-store" } });
           }
