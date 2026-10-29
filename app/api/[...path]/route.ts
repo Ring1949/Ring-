@@ -114,6 +114,36 @@ async function runArchiveRequest(
       }
     }
   }
+  if (method === "DELETE" && path[0] === "categories" && path[1]) {
+    const denied = requireAdmin(request);
+    if (denied) return denied;
+    const target = basePortfolioCategories().find((item: any) => String(item.id) === String(path[1]));
+    if (target) {
+      try {
+        const current = await getPortfolioCoverOverrides();
+        const categoryId = String(target.id);
+        const categoryCovers = { ...current.categories };
+        delete categoryCovers[categoryId];
+        const saved = await savePortfolioCoverOverrides({
+          ...current,
+          categories: categoryCovers,
+          deleted_categories: {
+            ...current.deleted_categories,
+            [categoryId]: new Date().toISOString()
+          }
+        });
+        // Imported/recovered categories are hidden by the persistent deletion
+        // manifest. Matching database rows are cleaned up on a best-effort basis.
+        await handleArchiveDelete(request, context).catch(() => undefined);
+        return NextResponse.json({ deleted: true, category_id: categoryId, version: saved.version }, {
+          headers: { "Cache-Control": "private, no-store, max-age=0" }
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "分类删除失败";
+        return NextResponse.json({ error: `分类删除失败：${message}` }, { status: 500 });
+      }
+    }
+  }
   try {
     const handler = method === "GET" ? handleArchiveGet : method === "POST" ? handleArchivePost : method === "PUT" ? handleArchivePut : handleArchiveDelete;
     const response = await handler(request, context);

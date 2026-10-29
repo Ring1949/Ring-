@@ -657,13 +657,26 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
     return json({ deleted: true });
   }
   if (path[0] === "categories" && path[1]) {
-    const existing = await supabase.from("categories").select("*").eq("id", Number(path[1])).maybeSingle();
+    const categoryId = Number(path[1]);
+    const existing = await supabase.from("categories").select("*").eq("id", categoryId).maybeSingle();
     if (existing.error) throw existing.error;
     if (!existing.data) return json({ error: "Resource not found" }, 404);
-    await removeStorageUrl(existing.data.cover_image);
-    const { error } = await supabase.from("categories").delete().eq("id", Number(path[1]));
+    const [projects, media] = await Promise.all([
+      supabase.from("projects").update({ category_id: null, updated_at: now() }).eq("category_id", categoryId).select("id"),
+      supabase.from("media").update({ category_id: null, updated_at: now() }).eq("category_id", categoryId).select("id")
+    ]);
+    if (projects.error) throw projects.error;
+    if (media.error) throw media.error;
+    const { data: deleted, error } = await supabase.from("categories").delete().eq("id", categoryId).select("id");
     if (error) throw error;
-    return json({ deleted: true });
+    if (!deleted?.length) return json({ error: "Resource not found" }, 404);
+    const cleanup = await Promise.allSettled([removeStorageUrl(existing.data.cover_image)]);
+    return json({
+      deleted: true,
+      detached_projects: projects.data?.length || 0,
+      detached_media: media.data?.length || 0,
+      cleanup_warnings: cleanup.filter((result) => result.status === "rejected").length
+    });
   }
   if (path[0] === "projects" && path[1]) {
     const existing = await supabase.from("projects").select("*").eq("id", Number(path[1])).maybeSingle();

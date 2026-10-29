@@ -301,7 +301,10 @@ async function removeItem(resource, id, label) {
         ? state.media.find((entry) => String(entry.id) === String(id))
         : state.tags.find((entry) => String(entry.id) === String(id));
   const itemName = item?.title || item?.name || label;
-  if (!confirm(`确定删除${label}「${itemName}」吗？此操作无法撤销。`)) return;
+  const confirmMessage = resource === "categories"
+    ? `确定删除${label}「${itemName}」吗？该分类下的作品和素材会保留，并转入未分类。`
+    : `确定删除${label}「${itemName}」吗？此操作无法撤销。`;
+  if (!confirm(confirmMessage)) return;
 
   const button = document.querySelector(`[data-delete-${resource === "projects" ? "project" : resource === "categories" ? "category" : resource === "media" ? "media" : "tag"}="${CSS.escape(String(id))}"]`);
   if (button) {
@@ -319,7 +322,7 @@ async function removeItem(resource, id, label) {
       button.disabled = false;
       button.textContent = "删除";
     }
-    notify(readableRequestError(error, `删除${label}`), true);
+    notify(error?.message || `删除${label}失败，请稍后重试。`, true);
   }
 }
 

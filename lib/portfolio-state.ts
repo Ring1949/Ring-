@@ -6,6 +6,7 @@ export type PortfolioCoverOverrides = {
   updated_at: string;
   categories: Record<string, string>;
   projects: Record<string, string>;
+  deleted_categories: Record<string, string>;
   deleted_projects: Record<string, string>;
 };
 
@@ -14,6 +15,7 @@ const emptyOverrides = (): PortfolioCoverOverrides => ({
   updated_at: new Date(0).toISOString(),
   categories: {},
   projects: {},
+  deleted_categories: {},
   deleted_projects: {}
 });
 
@@ -37,13 +39,14 @@ export function normalizeCoverOverrides(value: unknown): PortfolioCoverOverrides
     ...raw,
     categories: raw.categories && typeof raw.categories === "object" ? raw.categories : {},
     projects: raw.projects && typeof raw.projects === "object" ? raw.projects : {},
+    deleted_categories: raw.deleted_categories && typeof raw.deleted_categories === "object" ? raw.deleted_categories : {},
     deleted_projects: raw.deleted_projects && typeof raw.deleted_projects === "object" ? raw.deleted_projects : {}
   };
 }
 
 export function applyCategoryCoverOverrides(categories: any[], value: unknown) {
   const overrides = normalizeCoverOverrides(value);
-  return categories.map((item) => ({
+  return categories.filter((item) => !overrides.deleted_categories[String(item.id)]).map((item) => ({
     ...item,
     cover_image: overrides.categories[String(item.id)] || item.cover_image || ""
   }));
@@ -60,4 +63,9 @@ export function applyProjectCoverOverrides(projects: any[], value: unknown) {
 export function isPortfolioProjectDeleted(projectId: unknown, value: unknown) {
   const overrides = normalizeCoverOverrides(value);
   return Boolean(overrides.deleted_projects[String(projectId || "")]);
+}
+
+export function isPortfolioCategoryDeleted(categoryId: unknown, value: unknown) {
+  const overrides = normalizeCoverOverrides(value);
+  return Boolean(overrides.deleted_categories[String(categoryId || "")]);
 }
