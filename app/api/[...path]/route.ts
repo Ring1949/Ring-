@@ -19,6 +19,7 @@ import {
 } from "@/lib/portfolio-state";
 import { requireAdmin } from "@/lib/utils";
 import { getArchiveTombstones, markArchiveItemDeleted, removeArchivedItems } from "@/lib/archive-tombstones";
+import { mergeImportedPptMedia, mergeImportedPptProjects } from "@/lib/ppt-projects";
 
 type ArchiveContext = { params: Promise<{ path: string[] }> };
 
@@ -63,12 +64,12 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
     if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({
       ...project,
-      media: getRecoveredMedia().filter((item: any) => Number(item.project_id) === Number(project.id)),
+      media: mergeImportedPptMedia(getRecoveredMedia()).filter((item: any) => Number(item.project_id) === Number(project.id)),
       tags: []
     });
   }
   if (route === "media") {
-    let media = [...await getBlobMediaRecords(), ...getRecoveredMedia()];
+    let media = mergeImportedPptMedia([...await getBlobMediaRecords(), ...getRecoveredMedia()]);
     const projectId = search.get("project_id");
     const categoryId = search.get("category_id");
     if (projectId) media = media.filter((item: any) => Number(item.project_id) === Number(projectId));
@@ -204,6 +205,9 @@ async function runArchiveRequest(
     const handler = method === "GET" ? handleArchiveGet : method === "POST" ? handleArchivePost : method === "PUT" ? handleArchivePut : handleArchiveDelete;
     const response = await handler(request, context);
     if (method === "GET") {
+      if (route.startsWith("projects/") && response.status === 404) {
+        return recoveredGet(request, context);
+      }
       if (["projects", "media", "categories", "tags", "series"].includes(route)) {
         const body = await response.clone().text();
         if (body.trim() === "[]" || body.trim() === "{}" || body.trim() === "") return recoveredGet(request, context);
@@ -220,13 +224,24 @@ async function runArchiveRequest(
               : { categories: {}, tags: {} };
             const overlaid = route === "categories"
               ? applyCategoryCoverOverrides(mergePortfolioCategories(items, deleted.categories), overrides)
-              : applyProjectCoverOverrides(items, overrides);
+              : applyProjectCoverOverrides(mergeImportedPptProjects(items), overrides);
             return NextResponse.json(overlaid, { status: response.status, headers: { "Cache-Control": "private, no-store" } });
           }
         }
+        if (route === "media" && response.ok) {
+          const projectId = request.nextUrl.searchParams.get("project_id");
+          const categoryId = request.nextUrl.searchParams.get("category_id");
+          let items = mergeImportedPptMedia(await response.clone().json());
+          if (projectId) items = items.filter((item: any) => Number(item.project_id) === Number(projectId));
+          if (categoryId) items = items.filter((item: any) => Number(item.category_id) === Number(categoryId));
+          return NextResponse.json(items, { status: response.status, headers: { "Cache-Control": "private, no-store" } });
+        }
       }
       if (route.startsWith("projects/") && response.ok) {
-        const project = await response.clone().json();
+        const rawProject = await response.clone().json();
+        const project = mergeImportedPptProjects([rawProject]).find((item: any) => String(item.id) === String(rawProject.id)) || rawProject;
+        project.media = mergeImportedPptMedia(Array.isArray(rawProject.media) ? rawProject.media : [])
+          .filter((item: any) => Number(item.project_id) === Number(project.id));
         const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
         return NextResponse.json(applyProjectCoverOverrides([project], overrides)[0], { status: response.status, headers: { "Cache-Control": "private, no-store" } });
       }

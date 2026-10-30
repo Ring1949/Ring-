@@ -1,5 +1,6 @@
 import { getRecoveredCategories, getRecoveredHomePayload, getRecoveredSettings } from "@/lib/recovered-data";
 import { importedPhotoLibrary, mergeImportedCategories } from "@/lib/photo-library";
+import { mergeImportedPptProjects } from "@/lib/ppt-projects";
 
 export const defaultSettings: Record<string, string> = {
   site_name: "山川行止",
@@ -50,6 +51,7 @@ const recoveredHome = getRecoveredHomePayload()?.database_preview?.length
 
 export const fallbackHomePayload = {
   ...recoveredHome,
+  recommended: mergeImportedPptProjects(recoveredHome.recommended || []).filter((item: any) => item.is_recommended),
   categories: mergeImportedCategories(recoveredHome.categories || defaultCategories),
   database_preview: [
     ...(importedPhotoLibrary.media || []).filter((item: any) => item.show_in_database).slice(0, 12),

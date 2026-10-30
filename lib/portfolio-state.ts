@@ -1,5 +1,6 @@
 import { getRecoveredCategories, getRecoveredProjects } from "@/lib/recovered-data";
 import { importedPhotoLibrary, mergeImportedCategories } from "@/lib/photo-library";
+import { importedPptProjects } from "@/lib/ppt-projects";
 
 const CORE_CATEGORY_SLUGS = new Set(["photo", "graphic", "space", "ai", "other"]);
 const LEGACY_CATEGORY_SLUGS = new Set(["product", "interior", "motion", "daily", "database", "food", "three-d", "video"]);
@@ -57,7 +58,7 @@ export function mergePortfolioCategories(categories: any[], deleted: Record<stri
 
 export function basePortfolioProjects() {
   const byId = new Map<string, any>();
-  for (const project of [...getRecoveredProjects(), ...(importedPhotoLibrary.projects || [])]) {
+  for (const project of [...getRecoveredProjects(), ...(importedPhotoLibrary.projects || []), ...importedPptProjects]) {
     byId.set(String(project.id), { ...(byId.get(String(project.id)) || {}), ...project });
   }
   return [...byId.values()];
