@@ -117,6 +117,38 @@ async function useExistingCategoryCover(categoryId, url) {
   });
 }
 
+async function uploadProjectCoverFile(file, projectId, onProgress) {
+  if (!file?.type?.startsWith("image/")) throw new Error("系列封面必须是图片文件。");
+  if (file.size > 20 * 1024 * 1024) throw new Error("系列封面不能超过 20 MB。");
+  const signed = await request("/api/r2/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "cover", filename: file.name, contentType: file.type, size: file.size })
+  });
+  await uploadHeroObject(signed.upload_url || signed.signed_url, file, signed.upload_headers, onProgress);
+  return request("/api/portfolio-covers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kind: "project",
+      target_id: String(projectId),
+      url: signed.url,
+      pathname: signed.object_key,
+      size: file.size,
+      content_type: file.type,
+      storage_provider: "r2"
+    })
+  });
+}
+
+async function useExistingProjectCover(projectId, url) {
+  return request("/api/portfolio-covers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "project", target_id: String(projectId), existing_url: url })
+  });
+}
+
 async function bootstrap() {
   const me = await request("/api/me");
   if (!me.authenticated) {
@@ -398,23 +430,45 @@ async function saveCategory(event) {
 
 function openProjectModal(item={}) {
   const selectedTags = Array.isArray(item.tags) ? item.tags.map((tag)=>tag.id) : [];
+  const coverAssets = state.media.filter((media) => media.file_path && (media.media_type === "image" || String(media.mime_type || "").startsWith("image/") || /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(media.file_path)));
   openModal(`<form id="project-form" class="modal-form" enctype="multipart/form-data"><h2>${item.id?"编辑":"新增"}系列</h2><input type="hidden" name="id" value="${item.id||""}"><input type="hidden" name="is_series" value="1">
     <div class="field"><label>标题</label><input name="title" value="${escapeHtml(item.title||"")}" required></div><div class="field"><label>副标题</label><input name="subtitle" value="${escapeHtml(item.subtitle||"")}"></div>
     <div class="field"><label>分类</label><select name="category_id">${optionList(state.categories,item.category_id)}</select></div><div class="field"><label>Slug</label><input name="slug" value="${escapeHtml(item.slug||"")}"></div>
     <div class="field"><label>年份</label><input name="year" value="${escapeHtml(item.year||"")}"></div><div class="field"><label>地点</label><input name="location" value="${escapeHtml(item.location||"")}"></div>
     <div class="field wide"><label>描述</label><textarea name="description" rows="5">${escapeHtml(item.description||"")}</textarea></div>
     <div class="field wide"><label>文字标签（逗号分隔）</label><input name="tags" value="${escapeHtml(item.tags||"")}"></div>
-    <div class="field"><label>系列封面</label><a class="admin-cover-link" href="/admin/uploads?tab=covers&target=project:${item.id||""}#cover-manager">选择或更换封面 →</a></div><div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
+    <div class="field category-cover-field"><label>系列封面</label><div class="category-cover-preview">${item.cover_image?`<img src="${escapeHtml(item.cover_image)}" alt="当前系列封面">`:`<span>暂无封面</span>`}</div></div>
+    <div class="field category-cover-controls"><label>直接更换，不离开当前页面</label><select name="existing_cover"><option value="">保留当前封面</option>${coverAssets.map((media)=>`<option value="${escapeHtml(media.file_path)}">使用素材 · ${escapeHtml(media.title||media.original_name||"未命名图片")}</option>`).join("")}</select><label class="category-cover-file"><input name="cover_file" type="file" accept="image/*"><span>或选择本地图片</span></label><small class="category-cover-status">选择后与系列资料一起保存</small></div>
+    <div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
     <div class="field"><label>状态</label><select name="status"><option value="draft" ${item.status==="draft"?"selected":""}>草稿</option><option value="published" ${item.status==="published"?"selected":""}>已发布</option></select></div>
     <div class="checks"><label><input name="is_featured" type="checkbox" ${item.is_featured?"checked":""}> 首页精选</label><label><input name="is_recommended" type="checkbox" ${item.is_recommended?"checked":""}> 推荐内容</label></div>
     <div class="field wide"><label>标签</label><div class="checks project-edit-tags">${state.tags.map((tag)=>`<label class="system-tag-option"><input name="tag_ids" value="${tag.id}" type="checkbox" ${selectedTags.includes(tag.id)?"checked":""}><span>${escapeHtml(tag.name)}</span></label>`).join("")}</div></div>
-    <button class="primary wide">保存系列</button></form>`);
+    <button class="primary wide">保存系列与封面</button></form>`);
   if(item.id) request(`/api/projects/${item.id}`).then((full)=>{full.tags.forEach((tag)=>{const box=document.querySelector(`#project-form input[name=tag_ids][value="${tag.id}"]`);if(box)box.checked=true;});});
   document.querySelector("#project-form").addEventListener("submit",saveProject);
 }
 async function saveProject(event) {
-  event.preventDefault();const data=new FormData(event.target),id=data.get("id"),tagIds=data.getAll("tag_ids");data.delete("id");data.delete("tag_ids");data.set("tag_ids",JSON.stringify(tagIds));
-  await request(id?`/api/projects/${id}`:"/api/projects",{method:id?"PUT":"POST",body:data});closeModal();await loadAll();notify("系列已保存");
+  event.preventDefault();
+  const form=event.target,data=new FormData(form),id=data.get("id"),tagIds=data.getAll("tag_ids"),coverFile=data.get("cover_file"),existingCover=String(data.get("existing_cover")||"");
+  data.delete("id");data.delete("tag_ids");data.delete("cover_file");data.delete("existing_cover");data.set("tag_ids",JSON.stringify(tagIds));
+  const submit=form.querySelector("button[type=submit],button.primary"),status=form.querySelector(".category-cover-status");
+  submit.disabled=true;
+  try{
+    const hasNewCover=Boolean(coverFile?.size||existingCover);
+    status.textContent=hasNewCover?"正在准备系列封面…":"正在保存系列资料…";
+    const saved=await request(id?`/api/projects/${id}`:"/api/projects",{method:id?"PUT":"POST",body:data});
+    const projectId=saved.id||id;
+    if(coverFile?.size){
+      status.textContent="正在上传系列封面…";
+      await uploadProjectCoverFile(coverFile,projectId,(percentage)=>status.textContent=`正在上传系列封面 ${percentage}%`);
+    }else if(existingCover){
+      status.textContent="正在设置系列封面…";
+      await useExistingProjectCover(projectId,existingCover);
+    }
+    status.textContent="保存完成";
+    closeModal();await loadAll();notify(hasNewCover?"系列封面已更新":"系列已保存");
+  }catch(error){status.textContent=error.message||"保存失败";notify(error.message||"系列保存失败",true);}
+  finally{submit.disabled=false;}
 }
 
 document.querySelector("#contact-form").addEventListener("submit", async (event) => {

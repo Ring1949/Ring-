@@ -4,28 +4,39 @@ let recommendIndex = 0;
 let recommendVirtualItems = [];
 const HOME_PAYLOAD_CACHE_KEY = "ring:home-payload-cache";
 const HOME_PAYLOAD_CACHE_AGE = 30 * 60 * 1000;
+const HOME_PAYLOAD_CACHE_VERSION = 2;
 
 function readHomePayloadCache(){
   try{
     const cached=JSON.parse(sessionStorage.getItem(HOME_PAYLOAD_CACHE_KEY)||"null");
-    return cached&&Date.now()-cached.savedAt<HOME_PAYLOAD_CACHE_AGE?cached.payload:null;
+    return cached&&cached.version===HOME_PAYLOAD_CACHE_VERSION&&Date.now()-cached.savedAt<HOME_PAYLOAD_CACHE_AGE?cached.payload:null;
   }catch{return null;}
 }
 
 function saveHomePayloadCache(payload){
-  try{sessionStorage.setItem(HOME_PAYLOAD_CACHE_KEY,JSON.stringify({savedAt:Date.now(),payload}));}catch{/* continue without cache */}
+  try{sessionStorage.setItem(HOME_PAYLOAD_CACHE_KEY,JSON.stringify({version:HOME_PAYLOAD_CACHE_VERSION,savedAt:Date.now(),payload}));}catch{/* continue without cache */}
   return payload;
 }
 
-async function initHome() {
+function publishHomePayload(home){
+  window.__ringHomePayload=home;
+  window.dispatchEvent(new CustomEvent("ring:home-payload",{detail:home}));
+  return home;
+}
+
+async function initHome(homeOverride=null) {
   const cachedHome=readHomePayloadCache();
-  let returning=false;
-  try{returning=sessionStorage.getItem("ring:home-returning")==="1";sessionStorage.removeItem("ring:home-returning");}catch{/* continue normally */}
-  const homeRequest=cachedHome?Promise.resolve(cachedHome):api("/api/home").then(saveHomePayloadCache);
+  try{sessionStorage.removeItem("ring:home-returning");}catch{/* continue normally */}
+  const homeRequest=homeOverride?Promise.resolve(homeOverride):cachedHome?Promise.resolve(cachedHome):api("/api/home").then(saveHomePayloadCache);
   window.__ringHomePromise = homeRequest;
   const home = await homeRequest;
-  window.__ringHomePayload = home;
-  if(cachedHome&&!returning){api("/api/home").then(saveHomePayloadCache).catch(()=>undefined);}
+  publishHomePayload(home);
+  if(cachedHome&&!homeOverride){
+    api("/api/home").then(saveHomePayloadCache).then((fresh)=>{
+      if(JSON.stringify(fresh)===JSON.stringify(home))return publishHomePayload(fresh);
+      return initHome(fresh);
+    }).catch(()=>undefined);
+  }
   const { settings, hero } = home;
   document.title = `${settings.site_name || "山川行止"} — 个人视觉档案`;
   document.querySelector("#hero-title").textContent = settings.hero_title || settings.site_name;
@@ -203,3 +214,11 @@ addEventListener("resize", () => {
 });
 setupNavigation(document.querySelector(".hero"));
 initHome().catch((error) => console.error(error));
+addEventListener("pageshow",(event)=>{
+  const navigation=performance.getEntriesByType("navigation")[0];
+  if(!event.persisted&&navigation?.type!=="back_forward")return;
+  api("/api/home").then(saveHomePayloadCache).then((fresh)=>{
+    if(JSON.stringify(fresh)===JSON.stringify(window.__ringHomePayload))return publishHomePayload(fresh);
+    return initHome(fresh);
+  }).catch((error)=>console.error(error));
+});

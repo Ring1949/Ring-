@@ -13,7 +13,7 @@ export default function HomePage() {
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       <HomeInteractiveOverlays />
       <Script src="/common.js?v=20260812-nav-sync-1" strategy="afterInteractive" />
-      <Script src="/script.js?v=20260811-skill-library-1" strategy="afterInteractive" />
+      <Script src="/script.js?v=20261031-series-return-2" strategy="afterInteractive" />
     </>
   );
 }

@@ -121,6 +121,36 @@ async function runArchiveRequest(
       }
     }
   }
+  if (method === "PUT" && path[0] === "projects" && path[1]) {
+    const target = basePortfolioProjects().find((item: any) => String(item.id) === String(path[1]) || item.slug === path[1]);
+    if (target) {
+      const denied = requireAdmin(request);
+      if (denied) return denied;
+      const fallbackRequest = request.clone();
+      try {
+        const response = await handleArchivePut(request, context);
+        if (response.ok) return response;
+      } catch {
+        // Recovered and imported series may not have a matching database row.
+        // Their cover is persisted independently by /api/portfolio-covers.
+      }
+      const form = await fallbackRequest.formData();
+      return NextResponse.json({
+        ...target,
+        title: String(form.get("title") || target.title),
+        subtitle: String(form.get("subtitle") || target.subtitle || ""),
+        slug: String(form.get("slug") || target.slug || ""),
+        description: String(form.get("description") || target.description || ""),
+        year: String(form.get("year") || target.year || ""),
+        location: String(form.get("location") || target.location || ""),
+        sort_order: Number(form.get("sort_order") || target.sort_order || 0),
+        is_featured: form.get("is_featured") ? 1 : 0,
+        is_recommended: form.get("is_recommended") ? 1 : 0,
+        is_series: 1,
+        status: String(form.get("status") || target.status || "published")
+      }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+    }
+  }
   if (method === "PUT" && path[0] === "categories" && path[1]) {
     const target = basePortfolioCategories().find((item: any) => String(item.id) === String(path[1]));
     if (target) {

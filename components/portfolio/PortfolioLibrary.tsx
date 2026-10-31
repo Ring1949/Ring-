@@ -31,13 +31,19 @@ export default function PortfolioLibrary() {
   useEffect(() => {
     let active = true;
     const sharedWindow = window as HomeWindow;
+    const applyPayload = (payload: HomePayload | null | undefined) => {
+      if (active && Array.isArray(payload?.categories)) setCategories(payload.categories);
+    };
+    const onPayload = (event: Event) => applyPayload((event as CustomEvent<HomePayload>).detail);
+    window.addEventListener("ring:home-payload", onPayload);
     const request = sharedWindow.__ringHomePayload
       ? Promise.resolve(sharedWindow.__ringHomePayload)
       : sharedWindow.__ringHomePromise || fetch("/api/home", { cache: "no-store" }).then((response) => response.ok ? response.json() : null);
-    request.then((payload) => {
-      if (active && Array.isArray(payload?.categories)) setCategories(payload.categories);
-    }).catch(() => undefined);
-    return () => { active = false; };
+    request.then(applyPayload).catch(() => undefined);
+    return () => {
+      active = false;
+      window.removeEventListener("ring:home-payload", onPayload);
+    };
   }, []);
 
   const cards = categoryOrder.map((slug) => {
