@@ -6,6 +6,6 @@ import { getHomePayload } from "@/services/home.service";
 
 export async function GET() {
   return NextResponse.json(await getHomePayload(), {
-    headers: { "Cache-Control": "private, no-store, max-age=0" }
+    headers: { "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=86400" }
   });
 }

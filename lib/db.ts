@@ -26,18 +26,19 @@ export function slugify(value: unknown) {
 }
 
 export async function getSettings(): Promise<Record<string, string>> {
-  let databaseSettings: Record<string, string> = {};
-  let databaseError: unknown = null;
-  try {
-    const { data, error } = await getSupabaseServer()
-      .from("settings")
-      .select("key,value");
-    if (error) throw error;
-    databaseSettings = Object.fromEntries((data || []).map((row: any) => [row.key, row.value ?? ""]));
-  } catch (error) {
-    databaseError = error;
-  }
-  const r2Settings = await getR2Settings();
+  const databaseRequest = getSupabaseServer()
+    .from("settings")
+    .select("key,value")
+    .then(({ data, error }) => {
+      if (error) throw error;
+      return Object.fromEntries((data || []).map((row: any) => [row.key, row.value ?? ""]));
+    });
+  const [databaseResult, r2Settings] = await Promise.all([
+    Promise.resolve(databaseRequest).then((value) => ({ value, error: null as unknown })).catch((error) => ({ value: {} as Record<string, string>, error })),
+    getR2Settings()
+  ]);
+  const databaseSettings = databaseResult.value;
+  const databaseError = databaseResult.error;
   if (databaseError && !Object.keys(r2Settings).length && !isSupabaseConfigError(databaseError)) throw databaseError;
   return { ...defaultSettings, ...databaseSettings, ...r2Settings };
 }

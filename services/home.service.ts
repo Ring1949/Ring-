@@ -121,13 +121,13 @@ async function getHomePayloadFromSupabase() {
   };
 }
 
-async function applySavedPortfolioCovers(payload: any) {
-  const overrides = await getPortfolioCoverOverrides().catch(() => ({
+function applySavedPortfolioCovers(payload: any, savedOverrides?: any) {
+  const overrides = savedOverrides || {
     version: 1,
     updated_at: "",
     categories: {},
     projects: {}
-  }));
+  };
   return {
     ...payload,
     categories: applyCategoryCoverOverrides(payload.categories || [], overrides),
@@ -138,7 +138,10 @@ async function applySavedPortfolioCovers(payload: any) {
 
 export async function getHomePayload() {
   if (importedPhotoLibrary.media?.length) {
-    const settings = await getSettings().catch(() => fallbackHomePayload.settings);
+    const [settings, overrides] = await Promise.all([
+      getSettings().catch(() => fallbackHomePayload.settings),
+      getPortfolioCoverOverrides().catch(() => undefined)
+    ]);
     return applySavedPortfolioCovers({
       ...fallbackHomePayload,
       settings: { ...fallbackHomePayload.settings, ...settings },
@@ -146,12 +149,19 @@ export async function getHomePayload() {
         file_path: settings.hero_media || settings.hero_image || fallbackHomePayload.hero.file_path,
         media_type: settings.hero_media_type || fallbackHomePayload.hero.media_type || "image"
       }
-    });
+    }, overrides);
   }
   try {
-    return applySavedPortfolioCovers(await getHomePayloadFromSupabase());
+    const [payload, overrides] = await Promise.all([
+      getHomePayloadFromSupabase(),
+      getPortfolioCoverOverrides().catch(() => undefined)
+    ]);
+    return applySavedPortfolioCovers(payload, overrides);
   } catch (error) {
-    if (isSupabaseConfigError(error)) return applySavedPortfolioCovers(fallbackHomePayload);
+    if (isSupabaseConfigError(error)) {
+      const overrides = await getPortfolioCoverOverrides().catch(() => undefined);
+      return applySavedPortfolioCovers(fallbackHomePayload, overrides);
+    }
     throw error;
   }
 }

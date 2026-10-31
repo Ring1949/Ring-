@@ -18,14 +18,43 @@ function saveHomePayloadCache(payload){
   return payload;
 }
 
+function readHomeBootstrap(){
+  try{return JSON.parse(document.querySelector("#home-bootstrap")?.textContent||"null");}catch{return null;}
+}
+
 function publishHomePayload(home){
   window.__ringHomePayload=home;
   window.dispatchEvent(new CustomEvent("ring:home-payload",{detail:home}));
   return home;
 }
 
+function renderRecommended(projects=[]){
+  recommended=projects;
+  recommendVirtualItems=recommended.length>1?[...recommended,...recommended,...recommended]:[...recommended];
+  recommendIndex=recommended.length>1?recommended.length:0;
+  document.querySelector("#recommend-track").innerHTML=recommendVirtualItems.map((project,index)=>{
+    const realIndex=recommended.length?index%recommended.length:index;
+    const title=project.title||"未命名系列";
+    const subtitle=project.subtitle||project.description||project.category_name||"SERIES ARCHIVE";
+    const mediaPath=project.series_cover||project.cover_image||"";
+    const mediaType=project.series_media_type||"image";
+    return `
+    <a class="recommend-card ${index===recommendIndex?"current":""}" href="/project.html?id=${project.id}">
+      <div class="card-media ${fallbackCovers[(realIndex+2)%fallbackCovers.length]}">${mediaMarkup(mediaPath,mediaType,title)}</div>
+      <div class="recommend-info"><b>${String(realIndex+1).padStart(2,"0")}</b><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div></div>
+    </a>`;
+  }).join("");
+  document.querySelector(".recommend-window")?.classList.toggle("is-empty",!recommended.length);
+  requestAnimationFrame(updateRecommend);
+}
+
 async function initHome(homeOverride=null) {
   const cachedHome=readHomePayloadCache();
+  const bootstrapHome=!cachedHome&&!homeOverride?readHomeBootstrap():null;
+  if(bootstrapHome){
+    publishHomePayload(bootstrapHome);
+    renderRecommended(bootstrapHome.recommended||[]);
+  }
   try{sessionStorage.removeItem("ring:home-returning");}catch{/* continue normally */}
   const homeRequest=homeOverride?Promise.resolve(homeOverride):cachedHome?Promise.resolve(cachedHome):api("/api/home").then(saveHomePayloadCache);
   window.__ringHomePromise = homeRequest;
@@ -83,23 +112,7 @@ async function initHome(homeOverride=null) {
     keepHeroPlaying();
   }
 
-  recommended = home.recommended || [];
-  recommendVirtualItems = recommended.length > 1 ? [...recommended, ...recommended, ...recommended] : [...recommended];
-  recommendIndex = recommended.length > 1 ? recommended.length : 0;
-  document.querySelector("#recommend-track").innerHTML = recommendVirtualItems.map((project, index) => {
-    const realIndex = recommended.length ? index % recommended.length : index;
-    const title = project.title || "未命名系列";
-    const subtitle = project.subtitle || project.description || project.category_name || "SERIES ARCHIVE";
-    const mediaPath = project.series_cover || project.cover_image || "";
-    const mediaType = project.series_media_type || "image";
-    return `
-    <a class="recommend-card ${index === recommendIndex ? "current" : ""}" href="/project.html?id=${project.id}">
-      <div class="card-media ${fallbackCovers[(realIndex + 2) % fallbackCovers.length]}">${mediaMarkup(mediaPath, mediaType, title)}</div>
-      <div class="recommend-info"><b>${String(realIndex + 1).padStart(2, "0")}</b><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div></div>
-    </a>`;
-  }).join("");
-  document.querySelector(".recommend-window")?.classList.toggle("is-empty", !recommended.length);
-  requestAnimationFrame(updateRecommend);
+  renderRecommended(home.recommended||[]);
 
 }
 

@@ -1,5 +1,9 @@
 const seriesState={projects:[],category:""};
 
+function readSeriesBootstrap(){
+  try{return JSON.parse(document.querySelector("#series-bootstrap")?.textContent||"null");}catch{return null;}
+}
+
 function seriesCard(project,index){
   const cover=project.series_cover || project.cover_image;
   const type=project.series_media_type || "image";
@@ -17,11 +21,21 @@ function renderSeries(){
   document.querySelector("#series-grid").innerHTML=visible.length?visible.map(seriesCard).join(""):`<div class="series-loading">这个分类还没有系列作品。</div>`;
 }
 
+function renderSeriesFilters(categories=[]){
+  const slugs=new Set(seriesState.projects.map((item)=>item.category_slug));
+  document.querySelector("#series-filters").innerHTML=`<button class="${seriesState.category?"":"active"}" data-category="">全部系列</button>${categories.filter((item)=>slugs.has(item.slug)).map((item)=>`<button class="${seriesState.category===item.slug?"active":""}" data-category="${escapeHtml(item.slug)}">${escapeHtml(item.name)}</button>`).join("")}`;
+}
+
 async function initSeries(){
+  const bootstrap=readSeriesBootstrap();
+  if(bootstrap?.projects?.length){
+    seriesState.projects=bootstrap.projects;
+    renderSeriesFilters(bootstrap.categories||[]);
+    renderSeries();
+  }
   const [projects,categories]=await Promise.all([api("/api/series"),api("/api/categories")]);
   seriesState.projects=projects;
-  const slugs=new Set(projects.map((item)=>item.category_slug));
-  document.querySelector("#series-filters").innerHTML+=categories.filter((item)=>slugs.has(item.slug)).map((item)=>`<button data-category="${escapeHtml(item.slug)}">${escapeHtml(item.name)}</button>`).join("");
+  renderSeriesFilters(categories);
   renderSeries();
 }
 
@@ -33,4 +47,6 @@ document.querySelector("#series-filters").addEventListener("click",(event)=>{
   renderSeries();
 });
 setupNavigation();
-initSeries().catch((error)=>{document.querySelector("#series-grid").innerHTML=`<div class="series-loading">${escapeHtml(error.message)}</div>`;});
+initSeries().catch((error)=>{
+  if(!seriesState.projects.length)document.querySelector("#series-grid").innerHTML=`<div class="series-loading">${escapeHtml(error.message)}</div>`;
+});
