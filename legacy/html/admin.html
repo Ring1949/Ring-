@@ -55,31 +55,14 @@
       </section>
 
       <section class="admin-view" data-panel="categories">
-        <div class="toolbar"><button class="primary" data-new="category">＋ 新增作品分类</button><button data-jump-view="filters">编辑作品库筛选</button><a class="admin-nav-link" href="/admin/graph">关系图谱 →</a></div>
+        <div class="toolbar"><button class="primary" data-new="category">＋ 新增作品分类</button><a class="admin-nav-link" href="/admin/graph">关系图谱 →</a></div>
         <div id="category-list" class="admin-list"></div>
         <div class="taxonomy-section">
-          <p>WORK TAGS</p><h2>作品标签</h2>
+          <p>WORK TAGS</p><h2>作品小分类与标签</h2>
+          <span>标签会自动成为对应作品分类的小标题；没有作品使用的标签不会显示在前台。</span>
           <form id="tag-form" class="inline-form"><input name="name" placeholder="标签名称" required><input name="slug" placeholder="英文 slug"><button class="primary">新增标签</button></form>
           <div id="tag-list" class="tag-admin-list"></div>
         </div>
-      </section>
-
-      <section class="admin-view" data-panel="filters">
-        <div class="toolbar"><button data-jump-view="categories">← 返回分类与标签</button></div>
-        <div class="taxonomy-header">
-          <p>WORKS NAVIGATION</p><h2>作品库筛选分类</h2>
-          <span>这里控制作品库顶部的筛选标签。删除标签不会删除作品，作品仍保留在“全部”中。</span>
-        </div>
-        <div class="filter-editor form-card compact">
-          <div class="field"><label>正在编辑</label><select id="work-filter-group"><option value="photo">摄影</option><option value="graphic">平面</option><option value="space">空间</option><option value="ai">AI</option><option value="other">其他</option></select></div>
-          <form id="work-filter-form" class="inline-form wide">
-            <input name="label" placeholder="新分类名称，例如：静物" maxlength="30" required>
-            <input name="value" placeholder="匹配关键词（可留空）" maxlength="60">
-            <button class="primary" type="submit">＋ 新增分类</button>
-          </form>
-          <p class="filter-editor-help wide">“匹配关键词”用于查找作品标题、介绍和标签；留空时会自动使用分类名称。</p>
-        </div>
-        <div id="work-filter-list" class="filter-admin-list"></div>
       </section>
 
       <section class="admin-view" data-panel="projects">
@@ -153,7 +136,7 @@
 
   <div id="modal" class="modal" hidden><div class="modal-card"><button class="modal-close">×</button><div id="modal-content"></div></div></div>
   <script src="/glass-surface.js?v=20260702-1"></script>
-  <script src="/common.js?v=20260811-skill-library-1"></script><script src="admin.js?v=20261031-series-cover-return-6"></script>
+  <script src="/common.js?v=20260811-skill-library-1"></script><script src="admin.js?v=20261031-tag-taxonomy-7"></script>
 </body>
 </html>
 

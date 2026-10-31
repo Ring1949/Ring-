@@ -9,11 +9,11 @@ const categories = {
 
 let filters = {
   all: [["全部", "all"], ["摄影", "photo"], ["平面", "graphic"], ["空间", "space"], ["AI", "ai"], ["其他", "other"]],
-  photo: [["全部摄影", "all"], ["产品摄影", "product"], ["人物", "portrait"], ["校园活动", "campus"], ["纪实", "documentary"], ["展览与文化", "culture"], ["风光与建筑", "landscape"], ["创作", "creative"], ["戒指", "ring"], ["项链", "necklace"], ["手串手镯", "bracelet"], ["耳饰", "earring"], ["矿标", "mineral"], ["摆件", "ornament"], ["其他珠宝", "jewelry"]],
-  graphic: [["全部平面", "all"], ["设计", "design"], ["手绘", "drawing"], ["海报", "poster"]],
-  space: [["全部空间", "all"], ["室内", "interior"], ["建筑", "architecture"], ["3D建模", "threeD"]],
-  ai: [["全部 AI", "all"], ["生成图像", "generated"], ["概念草图", "concept"], ["工作流", "workflow"]],
-  other: [["全部其他", "all"], ["视频", "video"], ["手工", "craft"], ["日常", "daily"]]
+  photo: [["全部摄影", "all"]],
+  graphic: [["全部平面", "all"]],
+  space: [["全部空间", "all"]],
+  ai: [["全部 AI", "all"]],
+  other: [["全部其他", "all"]]
 };
 
 const pageParams = new URLSearchParams(location.search);
@@ -138,7 +138,7 @@ async function loadFilterConfig() {
       if (rows.length) filters[group] = rows;
     });
   } catch {
-    // The built-in taxonomy remains available if the remote setting is unavailable.
+    // Keep the single "all" entry if tags cannot be loaded.
   }
 }
 

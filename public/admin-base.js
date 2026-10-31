@@ -1,5 +1,5 @@
-const state = { settings:{}, categories:[], projects:[], media:[], tags:[], workFilters:{} };
-const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4f5c\u54c1\u5de5\u4f5c\u53f0",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u5206\u7c7b\u4e0e\u6807\u7b7e",filters:"\u4f5c\u54c1\u5e93\u7b5b\u9009",contact:"\u8054\u7cfb\u65b9\u5f0f" };
+const state = { settings:{}, categories:[], projects:[], media:[], tags:[] };
+const viewNames = { settings:"\u9996\u9875\u8bbe\u7f6e",media:"\u4f5c\u54c1\u5de5\u4f5c\u53f0",projects:"\u7cfb\u5217\u7ba1\u7406",categories:"\u5206\u7c7b\u4e0e\u6807\u7b7e",contact:"\u8054\u7cfb\u65b9\u5f0f" };
 
 const REQUEST_TIMEOUT_MS = 45000;
 function readableRequestError(error, action = "操作") {
@@ -174,10 +174,10 @@ document.querySelectorAll("[data-jump-view]").forEach((button) => button.addEven
 }));
 
 async function loadAll() {
-  [state.settings,state.categories,state.projects,state.media,state.tags,state.workFilters] = await Promise.all([
-    request("/api/settings"),request("/api/categories"),request("/api/projects"),request("/api/media"),request("/api/tags"),request("/api/work-filters")
+  [state.settings,state.categories,state.projects,state.media,state.tags] = await Promise.all([
+    request("/api/settings"),request("/api/categories"),request("/api/projects"),request("/api/media"),request("/api/tags")
   ]);
-  renderSettings(); renderCategories(); renderProjects(); renderMedia(); renderTags(); renderWorkFilters(); populateSelects();
+  renderSettings(); renderCategories(); renderProjects(); renderMedia(); renderTags(); populateSelects();
   const requested=location.hash.slice(1);if(requested)openAdminView(requested);
 }
 
@@ -258,52 +258,39 @@ function renderMedia() {
     <div class="row-actions"><button data-edit-media="${item.id}">编辑</button><button class="danger" data-delete-media="${item.id}">删除</button></div></article>`).join("");
 }
 function renderTags() {
-  document.querySelector("#tag-list").innerHTML = state.tags.map((tag) => `<span class="tag-pill">${escapeHtml(tag.name)} <button data-delete-tag="${tag.id}">×</button></span>`).join("");
-}
-
-const workFilterGroupNames = { photo:"摄影", graphic:"平面", space:"空间", ai:"AI", other:"其他" };
-function renderWorkFilters() {
-  const list = document.querySelector("#work-filter-list");
-  const group = document.querySelector("#work-filter-group")?.value || "photo";
-  if (!list) return;
-  const rows = Array.isArray(state.workFilters[group]) ? state.workFilters[group] : [];
-  list.innerHTML = rows.map((item, index) => item.value === "all" ? `
-    <article class="filter-admin-row filter-admin-fixed">
-      <span class="filter-order">${String(index + 1).padStart(2,"0")}</span>
-      <div><b>${escapeHtml(item.label)}</b><small>固定入口 · 显示 ${workFilterGroupNames[group]}全部作品</small></div>
-      <span class="filter-fixed-label">不可删除</span>
-    </article>` : `
-    <article class="filter-admin-row" data-work-filter-row data-filter-value="${escapeHtml(item.value)}">
-      <span class="filter-order">${String(index + 1).padStart(2,"0")}</span>
-      <label><span>显示名称</span><input name="filter_label" value="${escapeHtml(item.label)}" maxlength="30"></label>
-      <label><span>匹配关键词</span><input name="filter_value" value="${escapeHtml(item.value)}" maxlength="60"></label>
-      <div class="row-actions"><button type="button" data-save-work-filter>保存</button><button class="danger" type="button" data-delete-work-filter>删除</button></div>
-    </article>`).join("");
-}
-
-async function persistWorkFilters(message) {
-  state.workFilters = await request("/api/work-filters", {
-    method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(state.workFilters)
+  const usage = new Map();
+  state.media.forEach((item) => {
+    const ids = Array.isArray(item.tag_ids) ? item.tag_ids : String(item.tag_ids || "").split(",");
+    ids.map(String).filter(Boolean).forEach((id) => usage.set(id, (usage.get(id) || 0) + 1));
   });
-  renderWorkFilters();
-  notify(message);
+  document.querySelector("#tag-list").innerHTML = state.tags.map((tag) => `<article class="tag-pill">
+    <span><b>${escapeHtml(tag.name)}</b><small>${usage.get(String(tag.id)) || 0} 件作品 · ${escapeHtml(tag.slug || "")}</small></span>
+    <span class="tag-pill-actions"><button type="button" data-edit-tag="${tag.id}">编辑</button><button class="danger" type="button" data-delete-tag="${tag.id}">删除</button></span>
+  </article>`).join("");
 }
 
-document.querySelector("#work-filter-group")?.addEventListener("change", renderWorkFilters);
-document.querySelector("#work-filter-form")?.addEventListener("submit", async (event) => {
+function openTagModal(item = {}) {
+  openModal(`<form id="tag-edit-form" class="modal-form"><h2>${item.id ? "编辑" : "新增"}小分类标签</h2>
+    <input type="hidden" name="id" value="${item.id || ""}">
+    <div class="field"><label>显示名称</label><input name="name" value="${escapeHtml(item.name || "")}" required maxlength="40"></div>
+    <div class="field"><label>英文标识</label><input name="slug" value="${escapeHtml(item.slug || "")}" maxlength="60"></div>
+    <p class="wide filter-editor-help">把标签勾选给作品后，它会自动出现在对应作品分类的顶部；没有作品使用时不会在前台显示。</p>
+    <button class="primary wide" type="submit">保存标签</button></form>`);
+  document.querySelector("#tag-edit-form").addEventListener("submit", saveTag);
+}
+
+async function saveTag(event) {
   event.preventDefault();
-  const group = document.querySelector("#work-filter-group").value;
   const data = new FormData(event.target);
-  const label = String(data.get("label") || "").trim();
-  const value = String(data.get("value") || label).trim();
-  const rows = state.workFilters[group] || [];
-  if (!label) return notify("请输入分类名称", true);
-  if (rows.some((item) => item.value === value)) return notify("匹配关键词已存在，请换一个。", true);
-  rows.push({ label, value });
-  state.workFilters[group] = rows;
-  try { await persistWorkFilters("筛选分类已新增"); event.target.reset(); }
-  catch (error) { notify(error.message, true); }
-});
+  const id = data.get("id");
+  data.delete("id");
+  try {
+    await request(id ? `/api/tags/${id}` : "/api/tags", { method:id ? "PUT" : "POST", body:data });
+    closeModal();
+    await loadAll();
+    notify(id ? "标签已更新，作品库小分类已同步" : "标签已新增，可在上传作品时直接选择");
+  } catch (error) { notify(error.message || "标签保存失败", true); }
+}
 function populateSelects() {
   document.querySelector("#media-project").innerHTML = optionList(state.projects,null,"不归属具体作品");
   document.querySelector("#media-category").innerHTML = optionList(state.categories,null,"不归属分类");
@@ -319,33 +306,11 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.editCategory) openCategoryModal(state.categories.find((item)=>String(item.id)===target.dataset.editCategory));
   if (target.dataset.editProject) openProjectModal(state.projects.find((item)=>String(item.id)===target.dataset.editProject));
   if (target.dataset.editMedia) openMediaModal(state.media.find((item)=>String(item.id)===target.dataset.editMedia));
+  if (target.dataset.editTag) openTagModal(state.tags.find((item)=>String(item.id)===target.dataset.editTag));
   if (target.dataset.deleteCategory) await removeItem("categories",target.dataset.deleteCategory,"作品分类");
   if (target.dataset.deleteProject) await removeItem("projects",target.dataset.deleteProject,"系列");
   if (target.dataset.deleteMedia) await removeItem("media",target.dataset.deleteMedia,"作品素材");
   if (target.dataset.deleteTag) await removeItem("tags",target.dataset.deleteTag,"标签");
-  if (target.hasAttribute("data-save-work-filter")) {
-    const row = target.closest("[data-work-filter-row]");
-    const group = document.querySelector("#work-filter-group").value;
-    const previousValue = row.dataset.filterValue;
-    const label = row.querySelector('[name="filter_label"]').value.trim();
-    const value = row.querySelector('[name="filter_value"]').value.trim() || label;
-    if (!label) return notify("分类名称不能为空", true);
-    if ((state.workFilters[group] || []).some((item) => item.value === value && item.value !== previousValue)) return notify("匹配关键词已存在，请换一个。", true);
-    const item = (state.workFilters[group] || []).find((entry) => entry.value === previousValue);
-    if (item) { item.label = label; item.value = value; }
-    try { await persistWorkFilters("筛选分类已保存"); }
-    catch (error) { notify(error.message, true); }
-  }
-  if (target.hasAttribute("data-delete-work-filter")) {
-    const row = target.closest("[data-work-filter-row]");
-    const group = document.querySelector("#work-filter-group").value;
-    const value = row.dataset.filterValue;
-    const item = (state.workFilters[group] || []).find((entry) => entry.value === value);
-    if (!confirm(`确定删除筛选分类「${item?.label || value}」吗？作品本身不会被删除。`)) return;
-    state.workFilters[group] = (state.workFilters[group] || []).filter((entry) => entry.value !== value);
-    try { await persistWorkFilters("筛选分类已删除，作品内容保持不变"); }
-    catch (error) { notify(error.message, true); }
-  }
 });
 
 function openModal(content) {

@@ -561,6 +561,19 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
 
   const supabase = getSupabaseServer();
 
+  if (path[0] === "tags" && path[1]) {
+    const contentType = request.headers.get("content-type") || "";
+    const body: any = contentType.includes("application/json")
+      ? await request.json().catch(() => ({}))
+      : Object.fromEntries((await request.formData()).entries());
+    const name = String(body.name || "").trim();
+    if (!name) return json({ error: "标签名称不能为空" }, 400);
+    const payload = { name, slug: slugify(body.slug || name) };
+    const { data, error } = await supabase.from("tags").update(payload).eq("id", Number(path[1])).select("*").single();
+    if (error) throw error;
+    return json(data);
+  }
+
   if (path[0] === "categories" && path[1]) {
     const existing = await supabase.from("categories").select("*").eq("id", Number(path[1])).maybeSingle();
     if (existing.error) throw existing.error;

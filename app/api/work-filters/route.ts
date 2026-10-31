@@ -2,16 +2,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSettings, setSettings } from "@/lib/db";
-import { normalizeWorkFilters, parseWorkFilters } from "@/lib/work-filters";
+import { getActiveWorkTagFilters } from "@/services/database.service";
 import { requireAdmin } from "@/lib/utils";
-
-const SETTINGS_KEY = "works_filter_config";
 
 export async function GET() {
   try {
-    const settings = await getSettings();
-    return NextResponse.json(parseWorkFilters(settings[SETTINGS_KEY]));
+    return NextResponse.json(await getActiveWorkTagFilters(), {
+      headers: { "Cache-Control": "private, no-store, max-age=0" }
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "筛选分类读取失败" }, { status: 500 });
   }
@@ -20,11 +18,6 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   const denied = requireAdmin(request);
   if (denied) return denied;
-  try {
-    const config = normalizeWorkFilters(await request.json());
-    await setSettings({ [SETTINGS_KEY]: JSON.stringify(config) });
-    return NextResponse.json(config);
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "筛选分类保存失败" }, { status: 400 });
-  }
+  void request;
+  return NextResponse.json({ error: "作品库小分类现在由作品标签自动生成，请在“分类与标签”中管理标签。" }, { status: 409 });
 }

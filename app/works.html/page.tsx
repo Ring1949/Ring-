@@ -14,7 +14,7 @@ export default function WorksPage() {
       <link rel="stylesheet" href="/admin-login.css?v=20261029-1" />
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       <Script src="/common.js?v=20260812-unified-nav-1" strategy="afterInteractive" />
-      <Script src="/works.js?v=20261029-single-filter-nav-1" strategy="afterInteractive" />
+      <Script src="/works.js?v=20261031-tag-taxonomy-1" strategy="afterInteractive" />
     </>
   );
 }

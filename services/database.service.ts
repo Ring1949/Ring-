@@ -9,6 +9,9 @@ const normalizeMedia = (media: any) => {
   const { show_in_inspiration: _removedChannelFlag, ...cleanMedia } = media;
   const rawCategorySlug = media.categories?.slug || media.category_slug || "";
   const product = rawCategorySlug === "product" || isProductPhotography(media);
+  const systemTagItems = Array.isArray(media.system_tag_items)
+    ? media.system_tag_items.filter((tag: any) => tag?.id && tag?.name)
+    : [];
   return {
     ...cleanMedia,
     is_hero: flag(media.is_hero),
@@ -20,7 +23,10 @@ const normalizeMedia = (media: any) => {
     ...(product ? { collection_slug: "product" } : {}),
     category_id: rawCategorySlug === "product" ? 1 : media.category_id,
     category_name: rawCategorySlug === "product" ? "摄影" : media.categories?.name || media.category_name || "",
-    category_slug: rawCategorySlug === "product" ? "photo" : rawCategorySlug
+    category_slug: rawCategorySlug === "product" ? "photo" : rawCategorySlug,
+    system_tag_items: systemTagItems,
+    tag_ids: systemTagItems.map((tag: any) => String(tag.id)),
+    system_tags: systemTagItems.flatMap((tag: any) => [tag.name, tag.slug]).filter(Boolean).join(" ")
   };
 };
 
@@ -70,7 +76,7 @@ function buildCachedDatabaseMedia() {
 // The generated import is immutable for the lifetime of a deployment. Build and
 // sort it once instead of repeating O(N log N) work for every gallery page.
 const cachedDatabaseMedia = buildCachedDatabaseMedia();
-const liveMediaCacheTtlMs = 30_000;
+const liveMediaCacheTtlMs = 5_000;
 let liveMediaCache: { expiresAt: number; items: any[] } | null = null;
 let liveMediaRequest: Promise<any[]> | null = null;
 
@@ -87,7 +93,7 @@ function mergeDatabaseMedia(liveItems: any[]) {
 }
 
 async function fetchLiveDatabaseMedia() {
-  const items: any[] = [];
+  const rawItems: any[] = [];
   const pageSize = 1_000;
   for (let start = 0; start < 10_000; start += pageSize) {
     const { data, error } = await getSupabaseServer()
@@ -98,11 +104,41 @@ async function fetchLiveDatabaseMedia() {
       .order("id", { ascending: true })
       .range(start, start + pageSize - 1);
     if (error) throw error;
-    const page = (data || []).map(normalizeMedia);
-    items.push(...page);
+    const page = data || [];
+    rawItems.push(...page);
     if (page.length < pageSize) break;
   }
-  return items;
+  const mediaIds = rawItems.map((item) => Number(item.id)).filter(Number.isFinite);
+  const relations: any[] = [];
+  for (let start = 0; start < mediaIds.length; start += 500) {
+    const ids = mediaIds.slice(start, start + 500);
+    if (!ids.length) continue;
+    const { data, error } = await getSupabaseServer()
+      .from("media_tags")
+      .select("media_id,tag_id")
+      .in("media_id", ids);
+    if (!error) relations.push(...(data || []));
+  }
+  const tagIds = [...new Set(relations.map((relation) => Number(relation.tag_id)).filter(Number.isFinite))];
+  const tagById = new Map<string, any>();
+  for (let start = 0; start < tagIds.length; start += 500) {
+    const ids = tagIds.slice(start, start + 500);
+    const { data, error } = await getSupabaseServer().from("tags").select("id,name,slug").in("id", ids);
+    if (!error) (data || []).forEach((tag: any) => tagById.set(String(tag.id), tag));
+  }
+  const tagsByMedia = new Map<string, any[]>();
+  relations.forEach((relation) => {
+    const tag = tagById.get(String(relation.tag_id));
+    if (!tag?.id) return;
+    const key = String(relation.media_id);
+    const list = tagsByMedia.get(key) || [];
+    list.push(tag);
+    tagsByMedia.set(key, list);
+  });
+  return rawItems.map((item) => normalizeMedia({
+    ...item,
+    system_tag_items: tagsByMedia.get(String(item.id)) || []
+  }));
 }
 
 async function databaseMedia() {
@@ -144,7 +180,7 @@ function filterByCategory(items: any[], category: string | null) {
 }
 
 function mediaSearchText(item: any) {
-  return [item.title, item.description, item.tags, item.project_title, item.project_slug, item.category_name]
+  return [item.title, item.description, item.tags, item.system_tags, item.project_title, item.project_slug, item.category_name]
     .filter(Boolean)
     .join(" ")
     .toLocaleLowerCase("zh-CN");
@@ -160,7 +196,10 @@ function includesFilterTerm(text: string, term: string) {
 function filterGalleryItems(items: any[], filter: string | null, query: string | null) {
   let result = items;
   if (filter && filter !== "all") {
-    if (filter === "product") {
+    if (filter.startsWith("tag:")) {
+      const tagId = filter.slice(4);
+      result = result.filter((item) => (item.tag_ids || []).map(String).includes(tagId));
+    } else if (filter === "product") {
       result = result.filter(isProductPhotography);
     } else if (["photo", "graphic", "space", "ai", "other"].includes(filter)) {
       result = result.filter((item) => item.category_slug === filter);
@@ -171,6 +210,29 @@ function filterGalleryItems(items: any[], filter: string | null, query: string |
   }
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-CN");
   if (normalizedQuery) result = result.filter((item) => mediaSearchText(item).includes(normalizedQuery));
+  return result;
+}
+
+const allLabels: Record<string, string> = {
+  photo: "全部摄影",
+  graphic: "全部平面",
+  space: "全部空间",
+  ai: "全部 AI",
+  other: "全部其他"
+};
+
+export async function getActiveWorkTagFilters() {
+  const result: Record<string, Array<{ label: string; value: string }>> = {};
+  const media = await databaseMedia();
+  Object.entries(allLabels).forEach(([group, label]) => {
+    const tags = new Map<string, { label: string; value: string }>();
+    media
+      .filter((item) => item.category_slug === group)
+      .forEach((item) => (item.system_tag_items || []).forEach((tag: any) => {
+        if (tag?.id && tag?.name) tags.set(String(tag.id), { label: String(tag.name), value: `tag:${tag.id}` });
+      }));
+    result[group] = [{ label, value: "all" }, ...tags.values()];
+  });
   return result;
 }
 
