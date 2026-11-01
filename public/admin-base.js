@@ -365,11 +365,27 @@ async function removeItem(resource, id, label) {
   }
   notify(`正在删除${label}…`);
 
+  const removedTag = resource === "tags" ? state.tags.find((entry) => String(entry.id) === String(id)) : null;
+  if (removedTag) {
+    state.tags = state.tags.filter((entry) => String(entry.id) !== String(id));
+    renderTags();
+    const uploadCategory = document.querySelector("#media-category");
+    const checked = [...document.querySelectorAll('#media-tag-options input[name="tag_ids"]:checked')].map((input)=>input.value);
+    renderCategoryTagOptions(document.querySelector("#media-tag-options"), uploadCategory?.value || "", checked);
+  }
+
   try {
     await request(`/api/${resource}/${encodeURIComponent(id)}`, { method: "DELETE" });
-    await loadAll();
+    if (resource !== "tags") await loadAll();
     notify(`${label}已删除`);
   } catch (error) {
+    if (removedTag) {
+      state.tags.push(removedTag);
+      state.tags.sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"zh-CN"));
+      renderTags();
+      const uploadCategory = document.querySelector("#media-category");
+      renderCategoryTagOptions(document.querySelector("#media-tag-options"), uploadCategory?.value || "", []);
+    }
     if (button) {
       button.disabled = false;
       button.textContent = "删除";

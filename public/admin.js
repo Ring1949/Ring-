@@ -1,5 +1,5 @@
 const adminBase = document.createElement("script");
-adminBase.src = "admin-base.js?v=20261101-category-tags-8";
+adminBase.src = "admin-base.js?v=20261101-tag-delete-9";
 adminBase.onload = () => {
   const extension = document.createElement("script");
   extension.src = "admin-extension.js?v=20261101-category-tags-2";

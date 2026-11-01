@@ -2,6 +2,7 @@ import { getSettings, setSettings } from "@/lib/db";
 
 const CATEGORY_KEY = "__archive_deleted_categories";
 const TAG_KEY = "__archive_deleted_tags";
+const TAG_CATEGORY_KEY = "work_tag_category_map";
 
 type DeletedIds = Record<string, string>;
 
@@ -31,9 +32,19 @@ export async function getArchiveTombstones() {
 export async function markArchiveItemDeleted(kind: "categories" | "tags", id: unknown) {
   const itemId = String(id || "").trim();
   if (!itemId) throw new Error("缺少要删除的记录编号");
-  const current = await getArchiveTombstones();
-  const next = { ...current[kind], [itemId]: new Date().toISOString() };
-  await setSettings({ [kind === "categories" ? CATEGORY_KEY : TAG_KEY]: JSON.stringify(next) });
+  const settings = await getSettings();
+  const current = kind === "categories" ? parseDeletedIds(settings[CATEGORY_KEY]) : parseDeletedIds(settings[TAG_KEY]);
+  const next = { ...current, [itemId]: new Date().toISOString() };
+  const changes: Record<string, string> = {
+    [kind === "categories" ? CATEGORY_KEY : TAG_KEY]: JSON.stringify(next)
+  };
+  if (kind === "tags") {
+    let categoryMap: Record<string, unknown> = {};
+    try { categoryMap = JSON.parse(settings[TAG_CATEGORY_KEY] || "{}"); } catch { categoryMap = {}; }
+    delete categoryMap[itemId];
+    changes[TAG_CATEGORY_KEY] = JSON.stringify(categoryMap);
+  }
+  await setSettings(changes);
   return next;
 }
 

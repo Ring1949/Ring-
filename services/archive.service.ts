@@ -713,7 +713,6 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
     if (mediaLinks.error) throw mediaLinks.error;
     const { error } = await supabase.from("tags").delete().eq("id", tagId);
     if (error) throw error;
-    await setTagCategory(tagId, null);
     return json({ deleted: true });
   }
   if (path[0] === "categories" && path[1]) {

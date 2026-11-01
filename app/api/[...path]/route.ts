@@ -6,8 +6,7 @@ import { handleArchiveDelete, handleArchiveGet, handleArchivePost, handleArchive
 import {
   getRecoveredHomePayload,
   getRecoveredMedia,
-  getRecoveredSettings,
-  getRecoveredTags
+  getRecoveredSettings
 } from "@/lib/recovered-data";
 import { getBlobMediaRecords, getPortfolioCoverOverrides, savePortfolioCoverOverrides } from "@/lib/blob-library";
 import {
@@ -39,10 +38,7 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
     const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
     return NextResponse.json(applyCategoryCoverOverrides(mergePortfolioCategories([], deleted.categories), overrides));
   }
-  if (route === "tags") {
-    const deleted = await getArchiveTombstones().catch(() => ({ categories: {}, tags: {} }));
-    return NextResponse.json(removeArchivedItems(getRecoveredTags(), deleted.tags));
-  }
+  if (route === "tags") return NextResponse.json([]);
   if (route === "projects") {
     const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
     let projects = applyProjectCoverOverrides(basePortfolioProjects(), overrides);
@@ -221,8 +217,10 @@ async function runArchiveRequest(
     const denied = requireAdmin(request);
     if (denied) return denied;
     try {
-      await handleArchiveDelete(request, context).catch(() => undefined);
-      await markArchiveItemDeleted("tags", path[1]);
+      await Promise.all([
+        handleArchiveDelete(request, context).catch(() => undefined),
+        markArchiveItemDeleted("tags", path[1])
+      ]);
       return NextResponse.json({ deleted: true, tag_id: String(path[1]) }, {
         headers: { "Cache-Control": "private, no-store, max-age=0" }
       });
@@ -240,7 +238,10 @@ async function runArchiveRequest(
       }
       if (["projects", "media", "categories", "tags", "series"].includes(route)) {
         const body = await response.clone().text();
-        if (body.trim() === "[]" || body.trim() === "{}" || body.trim() === "") return recoveredGet(request, context);
+        if (body.trim() === "[]" || body.trim() === "{}" || body.trim() === "") {
+          if (route === "tags") return response;
+          return recoveredGet(request, context);
+        }
         if ((route === "categories" || route === "projects" || route === "series" || route === "tags") && response.ok) {
           const items = JSON.parse(body);
           if (Array.isArray(items)) {
@@ -281,7 +282,10 @@ async function runArchiveRequest(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown server error";
     console.error("[archive] failed", { method, path: request.nextUrl.pathname, duration_ms: Date.now() - startedAt, error: message });
-    if (method === "GET") return recoveredGet(request, context);
+    if (method === "GET") {
+      if (route === "tags") return NextResponse.json([], { headers: { "Cache-Control": "private, no-store, max-age=0" } });
+      return recoveredGet(request, context);
+    }
     return NextResponse.json({ error: `保存失败：${message}` }, { status: 500 });
   }
 }
