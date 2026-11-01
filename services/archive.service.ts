@@ -7,6 +7,34 @@ import { defaultCategories, isSupabaseConfigError } from "@/lib/fallback-data";
 
 const toBool = (value: unknown) => bool(value) === 1;
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
+const TAG_CATEGORY_SETTINGS_KEY = "work_tag_category_map";
+
+function parseTagCategoryMap(value: unknown): Record<string, number> {
+  try {
+    const source = typeof value === "string" ? JSON.parse(value) : value;
+    if (!source || typeof source !== "object") return {};
+    const entries: Array<[string, number]> = Object.entries(source as Record<string, unknown>)
+      .map(([id, categoryId]) => [String(id), Number(categoryId)] as [string, number])
+      .filter(([, categoryId]) => Number.isFinite(categoryId) && categoryId > 0);
+    return Object.fromEntries(entries);
+  } catch {
+    return {};
+  }
+}
+
+async function getTagCategoryMap() {
+  const settings = await getSettings();
+  return parseTagCategoryMap(settings[TAG_CATEGORY_SETTINGS_KEY]);
+}
+
+async function setTagCategory(tagId: number, categoryId: unknown) {
+  const map = await getTagCategoryMap();
+  const normalized = Number(categoryId) || 0;
+  if (normalized) map[String(tagId)] = normalized;
+  else delete map[String(tagId)];
+  await setSettings({ [TAG_CATEGORY_SETTINGS_KEY]: JSON.stringify(map) });
+  return normalized || null;
+}
 
 function normalizeProject(project: any) {
   if (!project) return project;
@@ -310,9 +338,12 @@ async function handleArchiveGetCore(request: NextRequest, context: { params: Pro
   }
 
   if (route === "tags") {
-    const { data, error } = await supabase.from("tags").select("*").order("name", { ascending: true });
+    const [{ data, error }, categoryMap] = await Promise.all([
+      supabase.from("tags").select("*").order("name", { ascending: true }),
+      getTagCategoryMap()
+    ]);
     if (error) throw error;
-    return json(data || []);
+    return json((data || []).map((tag: any) => ({ ...tag, category_id: categoryMap[String(tag.id)] || null })));
   }
 
   if (route === "series") {
@@ -485,9 +516,12 @@ export async function handleArchivePost(request: NextRequest, context: { params:
       : Object.fromEntries((await request.formData()).entries());
     const name = String(body.name || "").trim();
     if (!name) return json({ error: "Bad request" }, 400);
+    const categoryId = await canonicalCategoryId(body.category_id);
+    if (!categoryId) return json({ error: "请先选择标签所属的作品分类" }, 400);
     const { data, error } = await supabase.from("tags").insert({ name, slug: slugify(body.slug || name), created_at: now() }).select("*").single();
     if (error) throw error;
-    return json(data, 201);
+    await setTagCategory(Number(data.id), categoryId);
+    return json({ ...data, category_id: categoryId }, 201);
   }
 
   if (route === "projects") {
@@ -568,10 +602,13 @@ export async function handleArchivePut(request: NextRequest, context: { params: 
       : Object.fromEntries((await request.formData()).entries());
     const name = String(body.name || "").trim();
     if (!name) return json({ error: "标签名称不能为空" }, 400);
+    const categoryId = await canonicalCategoryId(body.category_id);
+    if (!categoryId) return json({ error: "请先选择标签所属的作品分类" }, 400);
     const payload = { name, slug: slugify(body.slug || name) };
     const { data, error } = await supabase.from("tags").update(payload).eq("id", Number(path[1])).select("*").single();
     if (error) throw error;
-    return json(data);
+    await setTagCategory(Number(path[1]), categoryId);
+    return json({ ...data, category_id: categoryId });
   }
 
   if (path[0] === "categories" && path[1]) {
@@ -676,6 +713,7 @@ export async function handleArchiveDelete(request: NextRequest, context: { param
     if (mediaLinks.error) throw mediaLinks.error;
     const { error } = await supabase.from("tags").delete().eq("id", tagId);
     if (error) throw error;
+    await setTagCategory(tagId, null);
     return json({ deleted: true });
   }
   if (path[0] === "categories" && path[1]) {

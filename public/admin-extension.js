@@ -125,10 +125,10 @@ function openMediaModal(item) {
   const selectedTagIds = String(item.tag_ids || "").split(",").filter(Boolean);
   openModal(`<form id="media-form" class="modal-form"><h2>编辑媒体</h2>
     <div class="field"><label>归属作品</label><select name="project_id">${optionList(state.projects,item.project_id,"不归属具体作品")}</select></div>
-    <div class="field"><label>作品分类</label><select name="category_id">${optionList(state.categories,item.category_id,"不归属分类")}</select></div>
+    <div class="field"><label>作品分类</label><select name="category_id" id="media-edit-category">${optionList(state.categories,item.category_id,"不归属分类")}</select></div>
     <div class="field wide"><label>标题</label><input name="title" value="${escapeHtml(item.title)}"></div>
     <div class="field wide"><label>描述</label><textarea name="description">${escapeHtml(item.description)}</textarea></div>
-    <div class="field wide"><label>文字标签</label><input name="tags" value="${escapeHtml(item.tags)}"></div>
+    <div class="field wide"><label>搜索关键词（不会生成作品小分类）</label><input name="tags" value="${escapeHtml(item.tags)}"></div>
     <details class="shooting-fields wide" ${(item.camera||item.lens||item.captured_at)?"open":""}><summary>拍摄 / 创作信息（可选）</summary><div>
       <label>相机<input name="camera" value="${escapeHtml(item.camera||"")}"></label>
       <label>镜头<input name="lens" value="${escapeHtml(item.lens||"")}"></label>
@@ -137,10 +137,14 @@ function openMediaModal(item) {
       <label>ISO<input name="iso" value="${escapeHtml(item.iso||"")}"></label>
       <label>拍摄时间<input name="captured_at" value="${escapeHtml(item.captured_at||"")}"></label>
     </div></details>
-    <div class="field wide"><label>系统标签</label><div class="checks media-edit-tags">${state.tags.map((tag)=>`<label class="system-tag-option"><input name="tag_ids" value="${tag.id}" type="checkbox" ${selectedTagIds.includes(String(tag.id))?"checked":""}><span>${escapeHtml(tag.name)}</span></label>`).join("")}</div></div>
+    <div class="field wide"><label>系统标签</label><div class="checks media-edit-tags"></div></div>
     <div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order}"></div>
     <div class="checks purpose-options"><label><input name="is_hero" type="checkbox" ${item.is_hero?"checked":""}> 首页全屏背景</label><label><input name="is_selected" type="checkbox" ${item.is_selected?"checked":""}> 精选作品</label><label><input name="show_in_database" type="checkbox" ${item.show_in_database?"checked":""}> 加入作品库</label><label><input name="is_cover" type="checkbox" ${item.is_cover?"checked":""}> 所属作品封面</label></div>
     <button class="primary wide">保存媒体</button></form>`);
+  const editCategory=document.querySelector("#media-edit-category");
+  const editTags=document.querySelector(".media-edit-tags");
+  renderCategoryTagOptions(editTags,editCategory.value,selectedTagIds);
+  editCategory.addEventListener("change",()=>renderCategoryTagOptions(editTags,editCategory.value,[]));
   document.querySelector("#media-form").addEventListener("submit",async(event)=>{
     event.preventDefault();const values=formDataObject(event.target);
     values.tag_ids=[...event.target.querySelectorAll('input[name="tag_ids"]:checked')].map((input)=>input.value);

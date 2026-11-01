@@ -264,7 +264,7 @@ function renderTags() {
     ids.map(String).filter(Boolean).forEach((id) => usage.set(id, (usage.get(id) || 0) + 1));
   });
   document.querySelector("#tag-list").innerHTML = state.tags.map((tag) => `<article class="tag-pill">
-    <span><b>${escapeHtml(tag.name)}</b><small>${usage.get(String(tag.id)) || 0} 件作品 · ${escapeHtml(tag.slug || "")}</small></span>
+    <span><b>${escapeHtml(tag.name)}</b><small>${escapeHtml(state.categories.find((category)=>String(category.id)===String(tag.category_id))?.name || "未指定分类")} · ${usage.get(String(tag.id)) || 0} 件作品 · ${escapeHtml(tag.slug || "")}</small></span>
     <span class="tag-pill-actions"><button type="button" data-edit-tag="${tag.id}">编辑</button><button class="danger" type="button" data-delete-tag="${tag.id}">删除</button></span>
   </article>`).join("");
 }
@@ -272,6 +272,7 @@ function renderTags() {
 function openTagModal(item = {}) {
   openModal(`<form id="tag-edit-form" class="modal-form"><h2>${item.id ? "编辑" : "新增"}小分类标签</h2>
     <input type="hidden" name="id" value="${item.id || ""}">
+    <div class="field"><label>所属作品分类</label><select name="category_id" required>${optionList(state.categories,item.category_id,"请选择作品分类")}</select></div>
     <div class="field"><label>显示名称</label><input name="name" value="${escapeHtml(item.name || "")}" required maxlength="40"></div>
     <div class="field"><label>英文标识</label><input name="slug" value="${escapeHtml(item.slug || "")}" maxlength="60"></div>
     <p class="wide filter-editor-help">把标签勾选给作品后，它会自动出现在对应作品分类的顶部；没有作品使用时不会在前台显示。</p>
@@ -294,9 +295,29 @@ async function saveTag(event) {
 function populateSelects() {
   document.querySelector("#media-project").innerHTML = optionList(state.projects,null,"不归属具体作品");
   document.querySelector("#media-category").innerHTML = optionList(state.categories,null,"不归属分类");
-  document.querySelector("#media-tag-options").innerHTML = state.tags.map((tag) =>
-    `<label class="system-tag-option"><input name="tag_ids" value="${tag.id}" type="checkbox"><span>${escapeHtml(tag.name)}</span></label>`
-  ).join("");
+  document.querySelector("#tag-category").innerHTML = optionList(state.categories,null,"先选择作品分类");
+  renderCategoryTagOptions(document.querySelector("#media-tag-options"), "", []);
+  document.querySelector("#media-category").onchange = (event) => renderCategoryTagOptions(document.querySelector("#media-tag-options"), event.target.value, []);
+}
+
+function tagsForCategory(categoryId) {
+  if (!categoryId) return [];
+  return state.tags.filter((tag) => String(tag.category_id) === String(categoryId));
+}
+
+function renderCategoryTagOptions(target, categoryId, selectedIds = []) {
+  if (!target) return;
+  const selected = new Set(selectedIds.map(String));
+  const tags = tagsForCategory(categoryId);
+  if (!categoryId) {
+    target.innerHTML = '<span class="tag-empty-hint">请先选择作品分类，再选择系统标签。</span>';
+    return;
+  }
+  if (!tags.length) {
+    target.innerHTML = '<span class="tag-empty-hint">这个分类还没有标签，请先到“分类与标签”中创建。</span>';
+    return;
+  }
+  target.innerHTML = tags.map((tag) => `<label class="system-tag-option"><input name="tag_ids" value="${tag.id}" type="checkbox" ${selected.has(String(tag.id)) ? "checked" : ""}><span>${escapeHtml(tag.name)}</span></label>`).join("");
 }
 
 document.querySelector("[data-new=category]").addEventListener("click",()=>openCategoryModal());
@@ -398,18 +419,22 @@ function openProjectModal(item={}) {
   const coverAssets = state.media.filter((media) => media.file_path && (media.media_type === "image" || String(media.mime_type || "").startsWith("image/") || /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(media.file_path)));
   openModal(`<form id="project-form" class="modal-form" enctype="multipart/form-data"><h2>${item.id?"编辑":"新增"}系列</h2><input type="hidden" name="id" value="${item.id||""}"><input type="hidden" name="is_series" value="1">
     <div class="field"><label>标题</label><input name="title" value="${escapeHtml(item.title||"")}" required></div><div class="field"><label>副标题</label><input name="subtitle" value="${escapeHtml(item.subtitle||"")}"></div>
-    <div class="field"><label>分类</label><select name="category_id">${optionList(state.categories,item.category_id)}</select></div><div class="field"><label>Slug</label><input name="slug" value="${escapeHtml(item.slug||"")}"></div>
+    <div class="field"><label>分类</label><select name="category_id" id="project-edit-category">${optionList(state.categories,item.category_id)}</select></div><div class="field"><label>Slug</label><input name="slug" value="${escapeHtml(item.slug||"")}"></div>
     <div class="field"><label>年份</label><input name="year" value="${escapeHtml(item.year||"")}"></div><div class="field"><label>地点</label><input name="location" value="${escapeHtml(item.location||"")}"></div>
     <div class="field wide"><label>描述</label><textarea name="description" rows="5">${escapeHtml(item.description||"")}</textarea></div>
-    <div class="field wide"><label>文字标签（逗号分隔）</label><input name="tags" value="${escapeHtml(item.tags||"")}"></div>
+    <div class="field wide"><label>搜索关键词（不会生成作品小分类）</label><input name="tags" value="${escapeHtml(item.tags||"")}"></div>
     <div class="field category-cover-field"><label>系列封面</label><div class="category-cover-preview">${item.cover_image?`<img src="${escapeHtml(item.cover_image)}" alt="当前系列封面">`:`<span>暂无封面</span>`}</div></div>
     <div class="field category-cover-controls"><label>直接更换，不离开当前页面</label><select name="existing_cover"><option value="">保留当前封面</option>${coverAssets.map((media)=>`<option value="${escapeHtml(media.file_path)}">使用素材 · ${escapeHtml(media.title||media.original_name||"未命名图片")}</option>`).join("")}</select><label class="category-cover-file"><input name="cover_file" type="file" accept="image/*"><span>或选择本地图片</span></label><small class="category-cover-status">选择后与系列资料一起保存</small></div>
     <div class="field"><label>排序</label><input name="sort_order" type="number" value="${item.sort_order||0}"></div>
     <div class="field"><label>状态</label><select name="status"><option value="draft" ${item.status==="draft"?"selected":""}>草稿</option><option value="published" ${item.status==="published"?"selected":""}>已发布</option></select></div>
     <div class="checks"><label><input name="is_featured" type="checkbox" ${item.is_featured?"checked":""}> 首页精选</label><label><input name="is_recommended" type="checkbox" ${item.is_recommended?"checked":""}> 推荐内容</label></div>
-    <div class="field wide"><label>标签</label><div class="checks project-edit-tags">${state.tags.map((tag)=>`<label class="system-tag-option"><input name="tag_ids" value="${tag.id}" type="checkbox" ${selectedTags.includes(tag.id)?"checked":""}><span>${escapeHtml(tag.name)}</span></label>`).join("")}</div></div>
+    <div class="field wide"><label>系统标签</label><div class="checks project-edit-tags"></div></div>
     <button class="primary wide">保存系列与封面</button></form>`);
-  if(item.id) request(`/api/projects/${item.id}`).then((full)=>{full.tags.forEach((tag)=>{const box=document.querySelector(`#project-form input[name=tag_ids][value="${tag.id}"]`);if(box)box.checked=true;});});
+  const projectCategory=document.querySelector("#project-edit-category");
+  const projectTags=document.querySelector(".project-edit-tags");
+  renderCategoryTagOptions(projectTags,projectCategory.value,selectedTags);
+  projectCategory.addEventListener("change",()=>renderCategoryTagOptions(projectTags,projectCategory.value,[]));
+  if(item.id) request(`/api/projects/${item.id}`).then((full)=>renderCategoryTagOptions(projectTags,projectCategory.value,(full.tags||[]).map((tag)=>tag.id)));
   document.querySelector("#project-form").addEventListener("submit",saveProject);
 }
 async function saveProject(event) {

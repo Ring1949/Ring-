@@ -3,6 +3,7 @@ import { getRecoveredMedia } from "@/lib/recovered-data";
 import { importedDatabaseMedia, importedPhotoLibrary, isProductPhotography } from "@/lib/photo-library";
 import { getBlobMediaRecords, getPortfolioCoverOverrides } from "@/lib/blob-library";
 import { isPortfolioProjectDeleted } from "@/lib/portfolio-state";
+import { getSettings } from "@/lib/db";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
 const normalizeMedia = (media: any) => {
@@ -223,13 +224,18 @@ const allLabels: Record<string, string> = {
 
 export async function getActiveWorkTagFilters() {
   const result: Record<string, Array<{ label: string; value: string }>> = {};
-  const media = await databaseMedia();
+  const [media, settings] = await Promise.all([databaseMedia(), getSettings().catch(() => ({} as Record<string, string>))]);
+  let categoryMap: Record<string, number> = {};
+  try { categoryMap = JSON.parse(settings.work_tag_category_map || "{}"); } catch { categoryMap = {}; }
   Object.entries(allLabels).forEach(([group, label]) => {
     const tags = new Map<string, { label: string; value: string }>();
     media
       .filter((item) => item.category_slug === group)
       .forEach((item) => (item.system_tag_items || []).forEach((tag: any) => {
-        if (tag?.id && tag?.name) tags.set(String(tag.id), { label: String(tag.name), value: `tag:${tag.id}` });
+        const assignedCategory = Number(categoryMap[String(tag?.id)]) || 0;
+        if (tag?.id && tag?.name && assignedCategory === Number(item.category_id)) {
+          tags.set(String(tag.id), { label: String(tag.name), value: `tag:${tag.id}` });
+        }
       }));
     result[group] = [{ label, value: "all" }, ...tags.values()];
   });
