@@ -6,6 +6,32 @@ import { isPortfolioProjectDeleted } from "@/lib/portfolio-state";
 import { getSettings } from "@/lib/db";
 
 const flag = (value: unknown) => value === true || value === 1 ? 1 : 0;
+const photoGroupNames: Record<string, string> = {
+  news: "新闻",
+  humanity: "人文",
+  landscape: "风光",
+  jewelry: "珠宝",
+  stilllife: "静物"
+};
+
+function classifyPhotoGroup(media: any, categorySlug: string) {
+  if (categorySlug !== "photo" && categorySlug !== "product") return "";
+  const systemNames = (Array.isArray(media.system_tag_items) ? media.system_tag_items : [])
+    .map((tag: any) => String(tag?.name || "").trim());
+  const keywordNames = String(media.tags || "").split(/[,，;；]/).map((tag) => tag.trim()).filter(Boolean);
+  const explicitNames = [...systemNames, ...keywordNames];
+  const explicit = Object.entries(photoGroupNames).find(([, name]) => explicitNames.includes(name));
+  if (explicit) return explicit[0];
+
+  const text = [media.title, media.description, media.tags, media.project_title, media.project_slug]
+    .filter(Boolean).join(" ").toLocaleLowerCase("zh-CN");
+  if (/(珠宝|戒指|项链|吊坠|手串|手镯|耳饰|耳环|耳钉|胸针|袖扣|jewelry|necklace|bracelet|earring|ring)/i.test(text)) return "jewelry";
+  if (/(静物|产品摄影|摆件|佛像|香炉|水晶|still\s*life|product)/i.test(text)) return "stilllife";
+  if (/(风光摄影|风光|风景|城市建筑|樱花|武汉大学|停机坪|landscape)/i.test(text)) return "landscape";
+  if (/(校园活动|新闻摄影|媒体发布|夜训|毕业典礼|毕业晚会|开学典礼|秋招|十佳歌手|思政课|交流赛|鱼宴|支教|论坛|车队|机器人团队|活力校园|news)/i.test(text)) return "news";
+  return "humanity";
+}
+
 const normalizeMedia = (media: any) => {
   const { show_in_inspiration: _removedChannelFlag, ...cleanMedia } = media;
   const rawCategorySlug = media.categories?.slug || media.category_slug || "";
@@ -13,7 +39,7 @@ const normalizeMedia = (media: any) => {
   const systemTagItems = Array.isArray(media.system_tag_items)
     ? media.system_tag_items.filter((tag: any) => tag?.id && tag?.name)
     : [];
-  return {
+  const normalized = {
     ...cleanMedia,
     is_hero: flag(media.is_hero),
     is_selected: flag(media.is_selected),
@@ -29,6 +55,7 @@ const normalizeMedia = (media: any) => {
     tag_ids: systemTagItems.map((tag: any) => String(tag.id)),
     system_tags: systemTagItems.flatMap((tag: any) => [tag.name, tag.slug]).filter(Boolean).join(" ")
   };
+  return { ...normalized, work_subcategory: classifyPhotoGroup(normalized, normalized.category_slug) };
 };
 
 const galleryFilterTerms: Record<string, string[]> = {
@@ -200,7 +227,9 @@ function includesFilterTerm(text: string, term: string) {
 function filterGalleryItems(items: any[], filter: string | null, query: string | null) {
   let result = items;
   if (filter && filter !== "all") {
-    if (filter.startsWith("tag:")) {
+    if (photoGroupNames[filter]) {
+      result = result.filter((item) => item.work_subcategory === filter);
+    } else if (filter.startsWith("tag:")) {
       const tagId = filter.slice(4);
       result = result.filter((item) => (item.tag_ids || []).map(String).includes(tagId));
     } else if (filter === "product") {
