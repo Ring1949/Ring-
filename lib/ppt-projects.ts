@@ -8,6 +8,7 @@ type PptProjectDefinition = {
   slideNumbers: number[];
   tags: string;
   style: string;
+  pptFile: string;
 };
 
 const definitions: PptProjectDefinition[] = [
@@ -20,7 +21,8 @@ const definitions: PptProjectDefinition[] = [
     folder: "animal-farm-research",
     slideNumbers: Array.from({ length: 23 }, (_, index) => index + 1),
     tags: "环境调研,景观空间,多感官设计",
-    style: "nature-research"
+    style: "nature-research",
+    pptFile: "/recovered/138-media.pptx"
   },
   {
     id: 71,
@@ -31,7 +33,8 @@ const definitions: PptProjectDefinition[] = [
     folder: "aging-home-safety",
     slideNumbers: [...Array.from({ length: 15 }, (_, index) => index + 1), 21, 26],
     tags: "适老化,住宅设计,室内空间",
-    style: "warm-interior"
+    style: "warm-interior",
+    pptFile: "/recovered/153-202419408033.pptx"
   }
 ];
 
@@ -59,7 +62,8 @@ export const importedPptProjects = definitions.map((item, index) => ({
   category_name: "空间",
   category_slug: "space",
   series_cover: slidePath(item.folder, item.slideNumbers[0]),
-  series_media_type: "image"
+  series_media_type: "image",
+  presentation_file: item.pptFile
 }));
 
 export const importedPptMedia = definitions.flatMap((item) =>

@@ -19,6 +19,7 @@ import {
 import { requireAdmin } from "@/lib/utils";
 import { getArchiveTombstones, markArchiveItemDeleted, removeArchivedItems } from "@/lib/archive-tombstones";
 import { mergeImportedPptMedia, mergeImportedPptProjects } from "@/lib/ppt-projects";
+import { importedPhotoLibrary } from "@/lib/photo-library";
 
 type ArchiveContext = { params: Promise<{ path: string[] }> };
 
@@ -56,11 +57,14 @@ async function recoveredGet(request: NextRequest, context: ArchiveContext) {
   if (route.startsWith("projects/")) {
     const id = Number(path[1]);
     const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
-    const project = applyProjectCoverOverrides(basePortfolioProjects(), overrides).find((item: any) => Number(item.id) === id || item.slug === path[1]);
+    const project = applyProjectCoverOverrides(basePortfolioProjects(), overrides).find((item: any) => String(item.id) === String(path[1]) || Number(item.id) === id || item.slug === path[1]);
     if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({
       ...project,
-      media: mergeImportedPptMedia(getRecoveredMedia()).filter((item: any) => Number(item.project_id) === Number(project.id)),
+      media: mergeImportedPptMedia([
+        ...getRecoveredMedia(),
+        ...(importedPhotoLibrary.media || [])
+      ]).filter((item: any) => String(item.project_id) === String(project.id)),
       tags: []
     });
   }
@@ -271,8 +275,11 @@ async function runArchiveRequest(
       if (route.startsWith("projects/") && response.ok) {
         const rawProject = await response.clone().json();
         const project = mergeImportedPptProjects([rawProject]).find((item: any) => String(item.id) === String(rawProject.id)) || rawProject;
-        project.media = mergeImportedPptMedia(Array.isArray(rawProject.media) ? rawProject.media : [])
-          .filter((item: any) => Number(item.project_id) === Number(project.id));
+        project.media = mergeImportedPptMedia([
+          ...(Array.isArray(rawProject.media) ? rawProject.media : []),
+          ...(importedPhotoLibrary.media || []).filter((item: any) => String(item.project_id) === String(project.id))
+        ])
+          .filter((item: any) => String(item.project_id) === String(project.id));
         const overrides = await getPortfolioCoverOverrides().catch(() => ({ version: 1, updated_at: "", categories: {}, projects: {} }));
         return NextResponse.json(applyProjectCoverOverrides([project], overrides)[0], { status: response.status, headers: { "Cache-Control": "private, no-store" } });
       }
