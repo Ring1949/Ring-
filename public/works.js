@@ -9,7 +9,7 @@ const categories = {
 
 let filters = {
   all: [["全部", "all"], ["摄影", "photo"], ["平面", "graphic"], ["空间", "space"], ["AI", "ai"], ["其他", "other"]],
-  photo: [["全部摄影", "all"]],
+  photo: [["全部摄影", "all"], ["新闻", "news"], ["人文", "humanity"], ["风光", "landscape"], ["珠宝", "jewelry"], ["静物", "stilllife"]],
   graphic: [["全部平面", "all"]],
   space: [["全部空间", "all"]],
   ai: [["全部 AI", "all"]],

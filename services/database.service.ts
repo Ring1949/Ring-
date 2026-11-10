@@ -32,6 +32,8 @@ const normalizeMedia = (media: any) => {
 };
 
 const galleryFilterTerms: Record<string, string[]> = {
+  news: ["news", "新闻", "新闻摄影", "媒体发布", "校园活动", "典礼", "论坛", "比赛", "现场"],
+  humanity: ["humanity", "人文", "人物", "纪实", "社会", "街头", "采访", "公共生活"],
   portrait: ["portrait", "人物", "人像", "情侣", "毕业", "采访"],
   campus: ["campus", "校园", "军训", "歌手", "典礼", "论坛", "比赛", "支教"],
   documentary: ["humanity", "documentary", "reportage", "纪实", "新闻", "现场", "社会"],
@@ -45,6 +47,7 @@ const galleryFilterTerms: Record<string, string[]> = {
   mineral: ["mineral", "矿标", "晶矿"],
   ornament: ["ornament", "摆件", "佛像", "香炉", "能量柱"],
   jewelry: ["jewelry", "珠宝", "胸针", "袖扣", "中古", "商业图集"],
+  stilllife: ["stilllife", "still life", "静物", "产品摄影", "摆件", "佛像", "香炉", "水晶"],
   design: ["design", "graphic", "brand", "设计", "品牌"],
   drawing: ["drawing", "sketch", "手绘", "素描"],
   poster: ["poster", "海报"],
@@ -222,22 +225,34 @@ const allLabels: Record<string, string> = {
   other: "全部其他"
 };
 
+const curatedWorkFilters: Record<string, Array<{ label: string; value: string }>> = {
+  photo: [
+    { label: "新闻", value: "news" },
+    { label: "人文", value: "humanity" },
+    { label: "风光", value: "landscape" },
+    { label: "珠宝", value: "jewelry" },
+    { label: "静物", value: "stilllife" }
+  ]
+};
+
 export async function getActiveWorkTagFilters() {
   const result: Record<string, Array<{ label: string; value: string }>> = {};
   const [media, settings] = await Promise.all([databaseMedia(), getSettings().catch(() => ({} as Record<string, string>))]);
   let categoryMap: Record<string, number> = {};
   try { categoryMap = JSON.parse(settings.work_tag_category_map || "{}"); } catch { categoryMap = {}; }
   Object.entries(allLabels).forEach(([group, label]) => {
+    const curated = curatedWorkFilters[group] || [];
+    const curatedNames = new Set(curated.map((item) => item.label));
     const tags = new Map<string, { label: string; value: string }>();
     media
       .filter((item) => item.category_slug === group)
       .forEach((item) => (item.system_tag_items || []).forEach((tag: any) => {
         const assignedCategory = Number(categoryMap[String(tag?.id)]) || 0;
         if (tag?.id && tag?.name && assignedCategory === Number(item.category_id)) {
-          tags.set(String(tag.id), { label: String(tag.name), value: `tag:${tag.id}` });
+          if (!curatedNames.has(String(tag.name))) tags.set(String(tag.id), { label: String(tag.name), value: `tag:${tag.id}` });
         }
       }));
-    result[group] = [{ label, value: "all" }, ...tags.values()];
+    result[group] = [{ label, value: "all" }, ...curated, ...tags.values()];
   });
   return result;
 }
