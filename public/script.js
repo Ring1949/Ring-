@@ -69,6 +69,7 @@ function renderRecommended(projects=[]){
     return `
     <a class="recommend-card series-book" data-series-index="${realIndex}" data-virtual-index="${virtualIndex}" style="--book-color:${bookColor};--book-ink:${bookInk}" href="/project.html?id=${project.id}" aria-label="${escapeHtml(title)}">
       <span class="series-book-spine"><strong>${escapeHtml(title)}</strong><small>RING · SERIES</small><i>${String(realIndex+1).padStart(2,"0")}</i></span>
+      <span class="series-book-volume" aria-hidden="true"><i></i><b></b></span>
       <span class="series-book-cover card-media ${fallbackCovers[(realIndex+2)%fallbackCovers.length]}">
         ${mediaMarkup(mediaPath,mediaType,title)}
         <span class="series-book-cover-shade"></span>
@@ -254,6 +255,7 @@ function updateRecommend(time=performance.now()) {
     card.style.setProperty("--cover-turn",`${90*(1-openness)}deg`);
     card.style.setProperty("--cover-clip",`${(1-openness)*50}%`);
     card.style.setProperty("--spine-clip",`${openness*50}%`);
+    card.style.setProperty("--book-depth",`${openness*11}px`);
     card.style.setProperty("--spine-shade",`${openness*.55}`);
     card.style.setProperty("--cover-shade",`${(1-openness)*.5}`);
     card.style.zIndex=String(Math.round(100-Math.abs(relative)*4));
