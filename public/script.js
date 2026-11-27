@@ -1,23 +1,7 @@
 const fallbackCovers = ["visual-a","visual-b","visual-c","visual-d","visual-e"];
 let recommended = [];
-let recommendVirtualItems = [];
 let recommendIndex = 0;
-let recommendScroll = 0;
-let recommendTarget = 0;
-let recommendFrame = 0;
-let recommendLastFrame = 0;
-let recommendPointer = { x: innerWidth / 2, y: innerHeight / 2, inside: false };
-let recommendTilt = { x: 0, y: 0 };
-let recommendHover = -1;
-const seriesBookPalettes = [
-  ["#183b36", "#d5c38c"],
-  ["#9a3428", "#ead6b4"],
-  ["#1e4d78", "#d9c89d"],
-  ["#8a7048", "#171a1a"],
-  ["#343438", "#ded5bc"],
-  ["#d9d0b8", "#223b53"],
-  ["#592f2a", "#e7c89e"]
-];
+let recommendVirtualItems = [];
 const HOME_PAYLOAD_CACHE_KEY = "ring:home-payload-cache";
 const HOME_PAYLOAD_CACHE_AGE = 30 * 60 * 1000;
 const HOME_PAYLOAD_CACHE_VERSION = 2;
@@ -46,78 +30,22 @@ function publishHomePayload(home){
 
 function renderRecommended(projects=[]){
   recommended=projects;
-  const track=document.querySelector("#recommend-track");
-  const windowElement=document.querySelector(".recommend-window");
-  if(!track||!windowElement)return;
-  if(!recommended.length){track.innerHTML="";windowElement.classList.add("is-empty");return;}
-  const copies=7;
-  const middleCopy=Math.floor(copies/2);
-  recommendVirtualItems=Array.from({length:recommended.length*copies},(_,virtualIndex)=>({
-    project:recommended[virtualIndex%recommended.length],
-    realIndex:virtualIndex%recommended.length,
-    virtualIndex
-  }));
-  recommendIndex=Math.min(recommendIndex,recommended.length-1);
-  recommendScroll=middleCopy*recommended.length+recommendIndex;
-  recommendTarget=recommendScroll;
-  track.innerHTML=recommendVirtualItems.map(({project,realIndex,virtualIndex})=>{
+  recommendVirtualItems=recommended.length>1?[...recommended,...recommended,...recommended]:[...recommended];
+  recommendIndex=recommended.length>1?recommended.length:0;
+  document.querySelector("#recommend-track").innerHTML=recommendVirtualItems.map((project,index)=>{
+    const realIndex=recommended.length?index%recommended.length:index;
     const title=project.title||"未命名系列";
     const subtitle=project.subtitle||project.description||project.category_name||"SERIES ARCHIVE";
     const mediaPath=project.series_cover||project.cover_image||"";
     const mediaType=project.series_media_type||"image";
-    const [bookColor,bookInk]=seriesBookPalettes[realIndex%seriesBookPalettes.length];
     return `
-    <a class="recommend-card series-book" data-series-index="${realIndex}" data-virtual-index="${virtualIndex}" style="--book-color:${bookColor};--book-ink:${bookInk}" href="/project.html?id=${project.id}" aria-label="${escapeHtml(title)}">
-      <span class="series-book-spine"><strong>${escapeHtml(title)}</strong><small>RING · SERIES</small><i>${String(realIndex+1).padStart(2,"0")}</i></span>
-      <span class="series-book-volume" aria-hidden="true"><i></i><b></b></span>
-      <span class="series-book-cover card-media ${fallbackCovers[(realIndex+2)%fallbackCovers.length]}">
-        ${mediaMarkup(mediaPath,mediaType,title)}
-        <span class="series-book-cover-shade"></span>
-        ${mediaPath?"":`<span class="series-book-cover-copy"><small>RING VISUAL ARCHIVE</small><strong>${escapeHtml(title)}</strong></span>`}
-      </span>
+    <a class="recommend-card ${index===recommendIndex?"current":""}" href="/project.html?id=${project.id}">
+      <div class="card-media ${fallbackCovers[(realIndex+2)%fallbackCovers.length]}">${mediaMarkup(mediaPath,mediaType,title)}</div>
       <div class="recommend-info"><b>${String(realIndex+1).padStart(2,"0")}</b><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div></div>
     </a>`;
   }).join("");
-  windowElement.classList.remove("is-empty");
-  let filters=windowElement.querySelector(".series-filter-tabs");
-  if(!filters){
-    filters=document.createElement("nav");
-    filters.className="series-filter-tabs";
-    filters.setAttribute("aria-label","系列筛选");
-    windowElement.prepend(filters);
-  }
-  filters.innerHTML=`<button data-series-filter="all">ALL / 全部</button>${recommended.map((_,index)=>`<button data-series-filter="${index}">${String(index+1).padStart(2,"0")}</button>`).join("")}`;
-  filters.querySelectorAll("button").forEach((button)=>button.addEventListener("click",(event)=>{
-    event.preventDefault();event.stopPropagation();
-    const requested=button.dataset.seriesFilter;
-    if(requested==="all"){recommendTarget=Math.round(recommendTarget/recommended.length)*recommended.length;return;}
-    const real=Number(requested);const current=Math.round(recommendTarget);const currentReal=((current%recommended.length)+recommended.length)%recommended.length;let delta=real-currentReal;if(delta>recommended.length/2)delta-=recommended.length;if(delta<-recommended.length/2)delta+=recommended.length;recommendTarget=current+delta;
-  }));
-  let caption=windowElement.querySelector(".series-caption");
-  if(!caption){
-    caption=document.createElement("div");
-    caption.className="series-caption";
-    caption.setAttribute("aria-live","polite");
-    caption.innerHTML='<div class="series-caption-title"><span></span></div><div class="series-caption-meta"><span></span></div><div class="series-caption-count"><span></span></div>';
-    windowElement.append(caption);
-  }
-  let cursor=windowElement.querySelector(".series-cursor");
-  if(!cursor){
-    cursor=document.createElement("span");
-    cursor.className="series-cursor";
-    cursor.innerHTML='<i></i><b>OPEN<small>打开</small></b>';
-    windowElement.append(cursor);
-  }
-  updateSeriesCaption(recommendIndex,1,true);
-  startRecommendMotion();
-  if(location.hash==="#series"&&!windowElement.dataset.seriesAligned){
-    windowElement.dataset.seriesAligned="true";
-    requestAnimationFrame(()=>{
-      const section=document.querySelector("#series");
-      const navHeight=document.querySelector(".nav")?.getBoundingClientRect().height||70;
-      if(section)scrollTo({top:Math.max(0,section.offsetTop-navHeight-24),behavior:"auto"});
-    });
-  }
+  document.querySelector(".recommend-window")?.classList.toggle("is-empty",!recommended.length);
+  requestAnimationFrame(updateRecommend);
 }
 
 async function initHome(homeOverride=null) {
@@ -195,127 +123,28 @@ function projectCard(project, index, main) {
   </a>`;
 }
 
-function smoothSeriesStep(value){const x=Math.max(0,Math.min(1,value));return x*x*(3-2*x);}
-function seriesBend(relative){return Math.abs(relative)<1?(relative+Math.sin(Math.PI*relative)/Math.PI)/2:Math.sign(relative)*.5;}
-function updateSeriesCaption(realIndex,direction=1,instant=false){
-  const project=recommended[realIndex];
-  if(!project)return;
-  const values=[project.title||"未命名系列",project.subtitle||project.description||"RING SERIES ARCHIVE",`${String(realIndex+1).padStart(2,"0")} / ${String(recommended.length).padStart(2,"0")}`];
-  const lines=[...document.querySelectorAll(".series-caption>div")];
-  lines.forEach((line,index)=>{
-    const old=line.querySelector("span");
-    const next=document.createElement("span");
-    next.textContent=values[index];
-    if(instant||!old){line.replaceChildren(next);return;}
-    line.append(next);
-    const from=direction>0?"105%":"-105%";
-    const to=direction>0?"-105%":"105%";
-    next.animate([{transform:`translateY(${from})`},{transform:"translateY(0)"}],{duration:650,easing:"cubic-bezier(.2,.8,.2,1)",fill:"both"});
-    old.animate([{transform:"translateY(0)"},{transform:`translateY(${to})`}],{duration:650,easing:"cubic-bezier(.2,.8,.2,1)",fill:"both"}).finished.then(()=>old.remove()).catch(()=>old.remove());
-  });
-  document.querySelectorAll(".series-filter-tabs button").forEach((button)=>button.classList.toggle("active",button.dataset.seriesFilter===String(realIndex)));
+function updateRecommend() {
+  const track = document.querySelector("#recommend-track");
+  const cards = [...track.children];
+  if (!cards.length) return;
+  const width = cards[0].getBoundingClientRect().width;
+  const gap = innerWidth <= 600 ? 20 : 60;
+  track.style.transform = `translateX(${innerWidth / 2 - width / 2 - recommendIndex * (width + gap)}px)`;
+  cards.forEach((card, index) => card.classList.toggle("current", index === recommendIndex));
 }
-function updateRecommend(time=performance.now()) {
-  const track=document.querySelector("#recommend-track");
-  const windowElement=document.querySelector(".recommend-window");
-  if(!track||!recommended.length||!windowElement)return;
-  const dt=Math.min((time-(recommendLastFrame||time))/1000,.05);recommendLastFrame=time;
-  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
-  recommendScroll+=(recommendTarget-recommendScroll)*(reduced?1:1-Math.exp(-5.6*dt));
-  if(Math.abs(recommendTarget-recommendScroll)<.0001)recommendScroll=recommendTarget;
-  const rect=windowElement.getBoundingClientRect();
-  const height=Math.min(innerHeight*.46,innerWidth*.31,470);
-  const spineWidth=height*142/840;
-  const depth=height*474/900;
-  const gap=height*.03;
-  track.style.setProperty("--tape-h",`${height}px`);track.style.setProperty("--spine-w",`${spineWidth}px`);track.style.setProperty("--cover-w",`${depth}px`);
-  const pointerX=(recommendPointer.x-(rect.left+rect.width/2))/(depth*.55);
-  const pointerY=(recommendPointer.y-(rect.top+rect.height*.49))/(height*.5);
-  const settled=Math.abs(recommendTarget-recommendScroll)<.3;
-  const tiltY=recommendPointer.inside&&settled?Math.max(-1,Math.min(1,pointerX))*9:0;
-  const tiltX=recommendPointer.inside&&settled?Math.max(-1,Math.min(1,-pointerY))*6:0;
-  recommendTilt.y+=(tiltY-recommendTilt.y)*(1-Math.exp(-7*dt));
-  recommendTilt.x+=(tiltX-recommendTilt.x)*(1-Math.exp(-7*dt));
-  [...track.children].forEach((card)=>{
-    const virtualIndex=Number(card.dataset.virtualIndex);
-    const relative=virtualIndex-recommendScroll;
-    const openness=smoothSeriesStep(Math.max(0,1-Math.abs(relative)));
-    const x=relative*(spineWidth+gap)+(depth-spineWidth+1.6*gap)*seriesBend(relative);
-    const visible=Math.abs(x)<rect.width/2+depth*1.5;
-    card.style.visibility=visible?"visible":"hidden";
-    if(!visible)return;
-    const hoverLift=virtualIndex===recommendHover&&Math.abs(relative)>.5?1:0;
-    card.style.setProperty("--book-x",`${x}px`);
-    card.style.setProperty("--book-y",`${-openness*.025*height-hoverLift*.045*height}px`);
-    card.style.setProperty("--book-z",`${openness*.2*height}px`);
-    card.style.setProperty("--book-rx",`${recommendTilt.x*openness}deg`);
-    card.style.setProperty("--book-ry",`${recommendTilt.y*openness}deg`);
-    card.style.setProperty("--book-rz",`${-4.5*openness}deg`);
-    card.style.setProperty("--spine-turn",`${-90*openness}deg`);
-    card.style.setProperty("--cover-turn",`${90*(1-openness)}deg`);
-    card.style.setProperty("--cover-clip",`${(1-openness)*50}%`);
-    card.style.setProperty("--spine-clip",`${openness*50}%`);
-    card.style.setProperty("--book-depth",`${openness*11}px`);
-    card.style.setProperty("--spine-shade",`${openness*.55}`);
-    card.style.setProperty("--cover-shade",`${(1-openness)*.5}`);
-    card.style.zIndex=String(Math.round(100-Math.abs(relative)*4));
-    card.classList.toggle("current",Math.abs(relative)<.5);
-  });
-  const rounded=((Math.round(recommendScroll)%recommended.length)+recommended.length)%recommended.length;
-  if(rounded!==recommendIndex){const direction=Math.sign(recommendTarget-recommendScroll)||1;recommendIndex=rounded;updateSeriesCaption(rounded,direction);}
-  const cursor=windowElement.querySelector(".series-cursor");
-  if(cursor){cursor.style.transform=`translate3d(${recommendPointer.x-rect.left}px,${recommendPointer.y-rect.top}px,0)`;cursor.classList.toggle("visible",recommendPointer.inside);cursor.classList.toggle("open",Math.abs(pointerX)<1&&Math.abs(pointerY)<1&&settled);}
-}
-function startRecommendMotion(){if(recommendFrame)return;const frame=(time)=>{updateRecommend(time);recommendFrame=requestAnimationFrame(frame);};recommendFrame=requestAnimationFrame(frame);}
 function moveRecommend(direction) {
   if (recommended.length <= 1) return;
-  recommendTarget=Math.round(recommendTarget)+direction;
-}
-
-function setupSeriesBookshelf(){
-  const windowElement=document.querySelector(".recommend-window");
-  const track=document.querySelector("#recommend-track");
-  if(!windowElement||!track||windowElement.dataset.bookshelfReady)return;
-  windowElement.dataset.bookshelfReady="true";
-  windowElement.tabIndex=0;
-  let dragStart=null;
-  let dragMoved=false;
-  windowElement.addEventListener("click",(event)=>{
-    const filter=event.target.closest("[data-series-filter]");
-    if(filter){
-      const requested=filter.dataset.seriesFilter;
-      if(requested==="all"){recommendTarget=Math.round(recommendTarget/recommended.length)*recommended.length;return;}
-      const real=Number(requested);const current=Math.round(recommendTarget);const currentReal=((current%recommended.length)+recommended.length)%recommended.length;let delta=real-currentReal;if(delta>recommended.length/2)delta-=recommended.length;if(delta<-recommended.length/2)delta+=recommended.length;recommendTarget=current+delta;return;
-    }
-    const card=event.target.closest(".recommend-card[data-series-index]");
-    if(!card)return;
-    if(dragMoved){event.preventDefault();dragMoved=false;return;}
-    const virtualIndex=Number(card.dataset.virtualIndex);
-    const relative=virtualIndex-recommendScroll;
-    if(Math.abs(relative)>=.5){event.preventDefault();recommendTarget=Math.round(recommendTarget+relative);}
-  });
-  windowElement.addEventListener("keydown",(event)=>{
-    if(event.key==="ArrowLeft"){event.preventDefault();moveRecommend(-1);}
-    if(event.key==="ArrowRight"){event.preventDefault();moveRecommend(1);}
-    if(event.key==="Enter")document.querySelector(".recommend-card.current")?.click();
-  });
-  windowElement.addEventListener("pointerenter",()=>{recommendPointer.inside=true;});
-  windowElement.addEventListener("pointerleave",()=>{recommendPointer.inside=false;recommendHover=-1;});
-  windowElement.addEventListener("pointerdown",(event)=>{if(event.target.closest?.("button"))return;dragStart={id:event.pointerId,x:event.clientX,target:recommendTarget};dragMoved=false;windowElement.setPointerCapture?.(event.pointerId);});
-  windowElement.addEventListener("pointermove",(event)=>{recommendPointer.x=event.clientX;recommendPointer.y=event.clientY;const card=event.target.closest?.(".series-book");recommendHover=card?Number(card.dataset.virtualIndex):-1;if(dragStart&&dragStart.id===event.pointerId){const dx=event.clientX-dragStart.x;if(Math.abs(dx)>5)dragMoved=true;const h=Math.min(innerHeight*.46,innerWidth*.31,470);recommendTarget=dragStart.target-dx/(h*142/840+h*.03);}});
-  windowElement.addEventListener("pointerup",(event)=>{
-    if(!dragStart||dragStart.id!==event.pointerId)return;
-    dragStart=null;recommendTarget=Math.round(recommendTarget);
-    setTimeout(()=>{dragMoved=false;},0);
-  });
-  windowElement.addEventListener("pointercancel",()=>{dragStart=null;});
-  let wheelSnap=0;
-  windowElement.addEventListener("wheel",(event)=>{
-    event.preventDefault();
-    const delta=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
-    const h=Math.min(innerHeight*.46,innerWidth*.31,470);recommendTarget+=delta/(h*142/840+h*.03)*.22;
-    clearTimeout(wheelSnap);wheelSnap=setTimeout(()=>{recommendTarget=Math.round(recommendTarget);},160);
-  },{passive:false});
+  recommendIndex += direction;
+  updateRecommend();
+  const track = document.querySelector("#recommend-track");
+  clearTimeout(moveRecommend.timer);
+  moveRecommend.timer = setTimeout(() => {
+    if (recommendIndex < recommended.length) recommendIndex += recommended.length;
+    if (recommendIndex >= recommended.length * 2) recommendIndex -= recommended.length;
+    track.style.transition = "none";
+    updateRecommend();
+    requestAnimationFrame(() => { track.style.transition = ""; });
+  }, 420);
 }
 
 function setupWorksLibraryBorderGlow(){
@@ -391,7 +220,6 @@ setupWorksLibraryBorderGlow();
 setupExtensionHomeSnapshot();
 document.querySelector(".carousel-button.left").addEventListener("click", () => moveRecommend(-1));
 document.querySelector(".carousel-button.right").addEventListener("click", () => moveRecommend(1));
-setupSeriesBookshelf();
 let recommendResizeFrame = 0;
 addEventListener("resize", () => {
   cancelAnimationFrame(recommendResizeFrame);
