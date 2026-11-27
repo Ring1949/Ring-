@@ -2,6 +2,15 @@ const fallbackCovers = ["visual-a","visual-b","visual-c","visual-d","visual-e"];
 let recommended = [];
 let recommendIndex = 0;
 let recommendVirtualItems = [];
+const seriesBookPalettes = [
+  ["#183b36", "#d5c38c"],
+  ["#9a3428", "#ead6b4"],
+  ["#1e4d78", "#d9c89d"],
+  ["#8a7048", "#171a1a"],
+  ["#343438", "#ded5bc"],
+  ["#d9d0b8", "#223b53"],
+  ["#592f2a", "#e7c89e"]
+];
 const HOME_PAYLOAD_CACHE_KEY = "ring:home-payload-cache";
 const HOME_PAYLOAD_CACHE_AGE = 30 * 60 * 1000;
 const HOME_PAYLOAD_CACHE_VERSION = 2;
@@ -30,17 +39,23 @@ function publishHomePayload(home){
 
 function renderRecommended(projects=[]){
   recommended=projects;
-  recommendVirtualItems=recommended.length>1?[...recommended,...recommended,...recommended]:[...recommended];
-  recommendIndex=recommended.length>1?recommended.length:0;
+  recommendVirtualItems=[...recommended];
+  recommendIndex=Math.min(recommendIndex,Math.max(recommended.length-1,0));
   document.querySelector("#recommend-track").innerHTML=recommendVirtualItems.map((project,index)=>{
-    const realIndex=recommended.length?index%recommended.length:index;
+    const realIndex=index;
     const title=project.title||"未命名系列";
     const subtitle=project.subtitle||project.description||project.category_name||"SERIES ARCHIVE";
     const mediaPath=project.series_cover||project.cover_image||"";
     const mediaType=project.series_media_type||"image";
+    const [bookColor,bookInk]=seriesBookPalettes[index%seriesBookPalettes.length];
     return `
-    <a class="recommend-card ${index===recommendIndex?"current":""}" href="/project.html?id=${project.id}">
-      <div class="card-media ${fallbackCovers[(realIndex+2)%fallbackCovers.length]}">${mediaMarkup(mediaPath,mediaType,title)}</div>
+    <a class="recommend-card series-book ${index===recommendIndex?"current":""}" data-series-index="${index}" style="--book-color:${bookColor};--book-ink:${bookInk}" href="/project.html?id=${project.id}" aria-label="${escapeHtml(title)}">
+      <span class="series-book-spine"><strong>${escapeHtml(title)}</strong><small>RING · SERIES</small><i>${String(realIndex+1).padStart(2,"0")}</i></span>
+      <span class="series-book-cover card-media ${fallbackCovers[(realIndex+2)%fallbackCovers.length]}">
+        ${mediaMarkup(mediaPath,mediaType,title)}
+        <span class="series-book-cover-shade"></span>
+        <span class="series-book-cover-copy"><small>RING VISUAL ARCHIVE</small><strong>${escapeHtml(title)}</strong></span>
+      </span>
       <div class="recommend-info"><b>${String(realIndex+1).padStart(2,"0")}</b><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div></div>
     </a>`;
   }).join("");
@@ -127,24 +142,69 @@ function updateRecommend() {
   const track = document.querySelector("#recommend-track");
   const cards = [...track.children];
   if (!cards.length) return;
-  const width = cards[0].getBoundingClientRect().width;
-  const gap = innerWidth <= 600 ? 20 : 60;
-  track.style.transform = `translateX(${innerWidth / 2 - width / 2 - recommendIndex * (width + gap)}px)`;
-  cards.forEach((card, index) => card.classList.toggle("current", index === recommendIndex));
+  const count=cards.length;
+  const spinePitch=innerWidth<=600?52:70;
+  const activeClearance=innerWidth<=600?132:190;
+  cards.forEach((card,index)=>{
+    let offset=index-recommendIndex;
+    if(count>2){
+      if(offset>count/2)offset-=count;
+      if(offset<-(count/2))offset+=count;
+    }
+    const distance=Math.abs(offset);
+    const x=offset===0?0:Math.sign(offset)*(activeClearance+(distance-1)*spinePitch);
+    card.style.setProperty("--book-x",`${x}px`);
+    card.style.setProperty("--book-rot",offset===0?"-4deg":`${Math.sign(offset)*-2}deg`);
+    card.style.setProperty("--book-z",offset===0?"54px":`${-distance*10}px`);
+    card.dataset.distance=String(Math.min(distance,5));
+    card.classList.toggle("current",index===recommendIndex);
+  });
 }
 function moveRecommend(direction) {
   if (recommended.length <= 1) return;
-  recommendIndex += direction;
+  recommendIndex=(recommendIndex+direction+recommended.length)%recommended.length;
   updateRecommend();
-  const track = document.querySelector("#recommend-track");
-  clearTimeout(moveRecommend.timer);
-  moveRecommend.timer = setTimeout(() => {
-    if (recommendIndex < recommended.length) recommendIndex += recommended.length;
-    if (recommendIndex >= recommended.length * 2) recommendIndex -= recommended.length;
-    track.style.transition = "none";
-    updateRecommend();
-    requestAnimationFrame(() => { track.style.transition = ""; });
-  }, 420);
+}
+
+function setupSeriesBookshelf(){
+  const windowElement=document.querySelector(".recommend-window");
+  const track=document.querySelector("#recommend-track");
+  if(!windowElement||!track||windowElement.dataset.bookshelfReady)return;
+  windowElement.dataset.bookshelfReady="true";
+  windowElement.tabIndex=0;
+  let dragStart=null;
+  let dragMoved=false;
+  track.addEventListener("click",(event)=>{
+    const card=event.target.closest(".recommend-card[data-series-index]");
+    if(!card)return;
+    if(dragMoved){event.preventDefault();dragMoved=false;return;}
+    const index=Number(card.dataset.seriesIndex);
+    if(index!==recommendIndex){event.preventDefault();recommendIndex=index;updateRecommend();}
+  });
+  windowElement.addEventListener("keydown",(event)=>{
+    if(event.key==="ArrowLeft"){event.preventDefault();moveRecommend(-1);}
+    if(event.key==="ArrowRight"){event.preventDefault();moveRecommend(1);}
+    if(event.key==="Enter")document.querySelector(".recommend-card.current")?.click();
+  });
+  windowElement.addEventListener("pointerdown",(event)=>{dragStart={id:event.pointerId,x:event.clientX};dragMoved=false;windowElement.setPointerCapture?.(event.pointerId);});
+  windowElement.addEventListener("pointermove",(event)=>{if(dragStart&&dragStart.id===event.pointerId&&Math.abs(event.clientX-dragStart.x)>8)dragMoved=true;});
+  windowElement.addEventListener("pointerup",(event)=>{
+    if(!dragStart||dragStart.id!==event.pointerId)return;
+    const distance=event.clientX-dragStart.x;dragStart=null;
+    if(Math.abs(distance)>34)moveRecommend(distance>0?-1:1);
+    setTimeout(()=>{dragMoved=false;},0);
+  });
+  windowElement.addEventListener("pointercancel",()=>{dragStart=null;});
+  let wheelAt=0;
+  windowElement.addEventListener("wheel",(event)=>{
+    const horizontal=Math.abs(event.deltaX)>Math.abs(event.deltaY)||event.shiftKey;
+    if(!horizontal||Math.max(Math.abs(event.deltaX),Math.abs(event.deltaY))<8)return;
+    event.preventDefault();
+    const now=performance.now();
+    if(now-wheelAt<360)return;
+    wheelAt=now;
+    moveRecommend((event.deltaX||event.deltaY)>0?1:-1);
+  },{passive:false});
 }
 
 function setupWorksLibraryBorderGlow(){
@@ -220,6 +280,7 @@ setupWorksLibraryBorderGlow();
 setupExtensionHomeSnapshot();
 document.querySelector(".carousel-button.left").addEventListener("click", () => moveRecommend(-1));
 document.querySelector(".carousel-button.right").addEventListener("click", () => moveRecommend(1));
+setupSeriesBookshelf();
 let recommendResizeFrame = 0;
 addEventListener("resize", () => {
   cancelAnimationFrame(recommendResizeFrame);
